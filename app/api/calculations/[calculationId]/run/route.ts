@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import type { Json } from "@/lib/database.types";
+import {
+  calculationRunFailure,
+  calculationRunnerFunction,
+} from "@/lib/calculation-run-dispatch";
 import { createClient } from "@/lib/supabase/server";
 
 type RunRequest = {
@@ -84,7 +88,7 @@ export async function POST(
   }
 
   const { data, error } = await supabase.functions.invoke(
-    linkedInputs.length ? "opencalcs-run-calculation-v2" : "opencalcs-run-calculation",
+    calculationRunnerFunction(linkedInputs.length > 0),
     {
       body: {
         projectId: body.projectId,
@@ -96,19 +100,11 @@ export async function POST(
     },
   );
 
-  if (error || data?.error) {
-    const errorContext = error && typeof error === "object" && "context" in error
-      ? (error as { context?: unknown }).context
-      : undefined;
-    const upstreamStatus = errorContext && typeof errorContext === "object" && "status" in errorContext
-      ? Number((errorContext as { status?: unknown }).status)
-      : undefined;
-    const message = upstreamStatus === 404 && linkedInputs.length
-      ? "Linked calculation support is not deployed yet. No linked run was saved."
-      : error?.message || data?.error || "Calculation failed.";
+  const failure = calculationRunFailure(error, data, linkedInputs.length > 0);
+  if (failure) {
     return NextResponse.json(
-      { error: message },
-      { status: upstreamStatus === 404 && linkedInputs.length ? 503 : 422 },
+      { error: failure.message },
+      { status: failure.status },
     );
   }
 
