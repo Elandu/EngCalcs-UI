@@ -1,8 +1,18 @@
 import Link from "next/link";
 import { AuthForm } from "@/components/auth-form";
 import { Brand } from "@/components/brand";
+import { safeAuthRedirectPath } from "@/lib/safe-auth-redirect";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const query = await searchParams;
+  const confirmationFailed = query.confirmation === "failed";
+  const next = Array.isArray(query.next) ? query.next[0] : query.next;
+  const redirectTo = safeAuthRedirectPath(next ?? null);
+
   return (
     <main className="auth-shell">
       <div className="auth-top">
@@ -13,7 +23,7 @@ export default function LoginPage() {
         <p className="eyebrow">Welcome back</p>
         <h1>Sign in to OpenCalcs</h1>
         <p>Open your projects, calculations and review history.</p>
-        <AuthForm mode="login" />
+        <AuthForm mode="login" confirmationFailed={confirmationFailed} redirectTo={redirectTo} />
       </section>
     </main>
   );

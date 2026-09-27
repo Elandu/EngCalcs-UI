@@ -14,37 +14,41 @@ export function WorkspaceOnboarding({ userId }: { userId: string }) {
     setBusy(true);
     setMessage("");
 
-    const supabase = createClient();
-    const { data: organisation, error: organisationError } = await supabase
-      .from("organisations")
-      .insert({
-        name: name.trim(),
-        created_by: userId,
-      })
-      .select("id")
-      .single();
+    try {
+      const supabase = createClient();
+      const { data: organisation, error: organisationError } = await supabase
+        .from("organisations")
+        .insert({
+          name: name.trim(),
+          created_by: userId,
+        })
+        .select("id")
+        .single();
 
-    if (organisationError || !organisation) {
+      if (organisationError || !organisation) {
+        setMessage(organisationError?.message || "Unable to create workspace.");
+        return;
+      }
+
+      const { error: membershipError } = await supabase
+        .from("organisation_members")
+        .insert({
+          organisation_id: organisation.id,
+          user_id: userId,
+          role: "owner",
+        });
+
+      if (membershipError) {
+        setMessage(membershipError.message);
+        return;
+      }
+
+      window.location.reload();
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : "Unable to create workspace.");
+    } finally {
       setBusy(false);
-      setMessage(organisationError?.message || "Unable to create workspace.");
-      return;
     }
-
-    const { error: membershipError } = await supabase
-      .from("organisation_members")
-      .insert({
-        organisation_id: organisation.id,
-        user_id: userId,
-        role: "owner",
-      });
-
-    if (membershipError) {
-      setBusy(false);
-      setMessage(membershipError.message);
-      return;
-    }
-
-    window.location.reload();
   }
 
   return (
@@ -72,7 +76,7 @@ export function WorkspaceOnboarding({ userId }: { userId: string }) {
         <button className="button button-primary" type="submit" disabled={busy}>
           {busy ? "Creating…" : "Create workspace"}
         </button>
-        {message ? <p className="form-message">{message}</p> : null}
+        {message ? <p className="form-message" role="alert">{message}</p> : null}
       </form>
     </section>
   );

@@ -21,7 +21,7 @@ Configure a dedicated Supabase project in `.env.local`:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-NEXT_PUBLIC_OPENCALCS_API_URL=http://127.0.0.1:8000
+OPENCALCS_API_URL=http://127.0.0.1:8000
 ```
 
 Do not put a Supabase secret/service-role key in any `NEXT_PUBLIC_` variable.

@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Brand } from "@/components/brand";
 import { NewProjectForm } from "@/components/new-project-form";
+import { WorkspaceHeader } from "@/components/workspace-header";
 import { createClient } from "@/lib/supabase/server";
+import { authPageHref } from "@/lib/safe-auth-redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export default async function NewProjectPage() {
   const userId = claimsData?.claims?.sub;
 
   if (!userId) {
-    redirect("/login");
+    redirect(authPageHref("login", "/dashboard/projects/new"));
   }
 
   const { data: memberships, error } = await supabase
@@ -35,10 +35,10 @@ export default async function NewProjectPage() {
 
   return (
     <main className="dashboard-shell">
-      <header className="dashboard-header">
-        <Brand />
-        <Link href="/dashboard">Back to projects</Link>
-      </header>
+      <WorkspaceHeader
+        area="projects"
+        canManageApiKeys={memberships.some((membership) => membership.role === "owner" || membership.role === "admin")}
+      />
 
       <section className="dashboard-workspace narrow-workspace">
         <p className="eyebrow">New project</p>

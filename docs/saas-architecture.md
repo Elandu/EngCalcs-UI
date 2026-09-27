@@ -127,6 +127,21 @@ Typed dependency edges between calculation outputs and downstream inputs.
 - created_by
 - created_at
 
+For generic calculation runs, `source_output_path` and `target_input_path` use
+RFC 6901 JSON Pointers. Wind workflow edges retain their workflow-stage paths.
+The edge records the reusable mapping; the immutable target run's
+`provenance_json.linked_inputs` records the exact source run, resolved value,
+and units used for that execution. The linked-run function verifies that the
+source run belongs to the selected source calculation in the same project,
+checks the target JSON Schema type and unit, resolves the value server-side,
+and saves the resolved inputs and mapping together. Scalar values and complete
+JSON objects can be linked when the target schema accepts them. No unit
+conversion is implicit.
+
+The generic `opencalcs-run-calculation` function remains the standalone path.
+`opencalcs-run-calculation-v2` is the linked path; deploy it to the project's
+Supabase environment before enabling linked runs in a deployed UI.
+
 ### reports
 
 - id

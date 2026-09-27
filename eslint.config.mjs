@@ -5,5 +5,10 @@ import nextTs from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores([".next/**", "node_modules/**", "public/vendor/**"]),
+  globalIgnores([
+    ".next/**",
+    "node_modules/**",
+    "supabase/functions/**",
+    "public/vendor/**",
+  ]),
 ]);

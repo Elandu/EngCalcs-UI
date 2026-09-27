@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Brand } from "@/components/brand";
 import { WorkspaceOnboarding } from "@/components/workspace-onboarding";
+import { WorkspaceHeader } from "@/components/workspace-header";
 import { createClient } from "@/lib/supabase/server";
+import { authPageHref } from "@/lib/safe-auth-redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -12,19 +13,21 @@ export default async function DashboardPage() {
   const { data: claimsData } = await supabase.auth.getClaims();
 
   if (!claimsData?.claims?.sub) {
-    redirect("/login");
+    redirect(authPageHref("login", "/dashboard"));
   }
 
   const userId = claimsData.claims.sub;
 
-  await supabase
-    .from("profiles")
-    .upsert({ user_id: userId }, { onConflict: "user_id", ignoreDuplicates: true });
-
-  const { data: memberships, error: membershipError } = await supabase
-    .from("organisation_members")
-    .select("role, organisation_id, organisations(id, name, slug)")
-    .order("created_at", { ascending: true });
+  const [, membershipResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .upsert({ user_id: userId }, { onConflict: "user_id", ignoreDuplicates: true }),
+    supabase
+      .from("organisation_members")
+      .select("role, organisation_id, organisations(id, name, slug)")
+      .order("created_at", { ascending: true }),
+  ]);
+  const { data: memberships, error: membershipError } = membershipResult;
 
   if (membershipError) {
     throw new Error(`Unable to load workspace membership: ${membershipError.message}`);
@@ -32,41 +35,52 @@ export default async function DashboardPage() {
 
   const organisationIds = (memberships ?? []).map((membership) => membership.organisation_id);
 
-  const { data: projects, error: projectError } = organisationIds.length
-    ? await supabase
-        .from("projects")
-        .select("id, organisation_id, project_number, name, address, status, updated_at")
-        .in("organisation_id", organisationIds)
-        .order("updated_at", { ascending: false })
-        .limit(12)
-    : { data: [], error: null };
+  const [projectResult, activeProjectCountResult] = organisationIds.length
+    ? await Promise.all([
+        supabase
+          .from("projects")
+          .select("id, organisation_id, project_number, name, address, status, updated_at")
+          .in("organisation_id", organisationIds)
+          .order("updated_at", { ascending: false })
+          .limit(12),
+        supabase
+          .from("projects")
+          .select("id", { count: "exact", head: true })
+          .in("organisation_id", organisationIds)
+          .eq("status", "active"),
+      ])
+    : [{ data: [], error: null }, { count: 0, error: null }];
+  const { data: projects, error: projectError } = projectResult;
+  const { count: activeProjectCount, error: activeProjectCountError } = activeProjectCountResult;
 
   if (projectError) {
     throw new Error(`Unable to load projects: ${projectError.message}`);
   }
 
+  if (activeProjectCountError) {
+    throw new Error(`Unable to count active projects: ${activeProjectCountError.message}`);
+  }
+
   if (!memberships?.length) {
     return (
       <main className="dashboard-shell">
-        <header className="dashboard-header">
-          <Brand />
-          <span className="status-pill">New workspace</span>
-        </header>
+        <WorkspaceHeader area="projects" trailing={<span className="status-pill">New workspace</span>} />
         <WorkspaceOnboarding userId={userId} />
       </main>
     );
   }
 
+  const canCreateProjects = memberships.some((membership) =>
+    membership.role === "owner" || membership.role === "admin" || membership.role === "engineer",
+  );
+
   return (
     <main className="dashboard-shell">
-      <header className="dashboard-header">
-        <Brand />
-        <div className="dashboard-header-actions">
-          <Link href="/dashboard/settings/api-keys">API & MCP keys</Link>
-          <Link href="/dashboard/structural-fea">Structural FEA</Link>
-          <span className="status-pill">Engineering workspace</span>
-        </div>
-      </header>
+      <WorkspaceHeader
+        area="projects"
+        canManageApiKeys={memberships.some((membership) => membership.role === "owner" || membership.role === "admin")}
+        trailing={<span className="status-pill">Engineering workspace</span>}
+      />
 
       <section className="dashboard-workspace">
         <div className="dashboard-title-row">
@@ -80,9 +94,11 @@ export default async function DashboardPage() {
           <Link className="button button-secondary" href="/dashboard/drawings">
             Drawing review
           </Link>
-          <Link className="button button-primary" href="/dashboard/projects/new">
-            New project
-          </Link>
+          {canCreateProjects ? (
+            <Link className="button button-primary" href="/dashboard/projects/new">
+              New project
+            </Link>
+          ) : null}
         </div>
 
         <div className="workspace-summary-grid">
@@ -92,12 +108,12 @@ export default async function DashboardPage() {
           </article>
           <article className="summary-card">
             <span>Active projects</span>
-            <strong>{projects?.filter((project) => project.status === "active").length ?? 0}</strong>
+            <strong>{activeProjectCount ?? 0}</strong>
           </article>
           <article className="summary-card">
-            <span>Calculation modules</span>
-            <strong>1</strong>
-            <small>OpenWind connected</small>
+            <span>Calculation engine</span>
+            <strong>OpenCalcs API</strong>
+            <small>Versioned definitions and runs</small>
           </article>
         </div>
 
@@ -107,6 +123,9 @@ export default async function DashboardPage() {
               <h2>Recent projects</h2>
               <p>Projects visible through your organisation membership.</p>
             </div>
+            <Link className="button button-secondary button-small" href="/dashboard/projects">
+              View all projects
+            </Link>
           </div>
 
           {projects?.length ? (

@@ -4,14 +4,27 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { authPageHref } from "@/lib/safe-auth-redirect";
 
 type Mode = "login" | "signup";
 
-export function AuthForm({ mode }: { mode: Mode }) {
+export function AuthForm({
+  mode,
+  confirmationFailed = false,
+  redirectTo,
+}: {
+  mode: Mode;
+  confirmationFailed?: boolean;
+  redirectTo: string;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(
+    confirmationFailed
+      ? "That confirmation link could not be used. Sign in if your account is already confirmed, or sign up to request a fresh link."
+      : "",
+  );
   const [busy, setBusy] = useState(false);
 
   const isSignup = mode === "signup";
@@ -23,8 +36,17 @@ export function AuthForm({ mode }: { mode: Mode }) {
     setBusy(true);
     const supabase = createClient();
 
+    const confirmationUrl = new URL("/auth/confirm", window.location.origin);
+    confirmationUrl.searchParams.set("next", redirectTo);
+
     const result = isSignup
-      ? await supabase.auth.signUp({ email, password })
+      ? await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: confirmationUrl.toString(),
+          },
+        })
       : await supabase.auth.signInWithPassword({ email, password });
 
     setBusy(false);
@@ -39,7 +61,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
       return;
     }
 
-    router.push("/dashboard");
+    router.push(redirectTo);
     router.refresh();
   }
 
@@ -70,10 +92,10 @@ export function AuthForm({ mode }: { mode: Mode }) {
       <button className="button button-primary auth-submit" type="submit" disabled={busy}>
         {busy ? "Working…" : isSignup ? "Create workspace" : "Sign in"}
       </button>
-      {message ? <p className="form-message">{message}</p> : null}
+      {message ? <p className="form-message" role="status" aria-live="polite">{message}</p> : null}
       <p className="auth-switch">
         {isSignup ? "Already have an account?" : "New to OpenCalcs?"}{" "}
-        <Link href={isSignup ? "/login" : "/signup"}>
+        <Link href={authPageHref(isSignup ? "login" : "signup", redirectTo)}>
           {isSignup ? "Sign in" : "Create an account"}
         </Link>
       </p>

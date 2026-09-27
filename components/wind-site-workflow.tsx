@@ -37,9 +37,27 @@ type WorkflowResult = {
     governing_vdes_mps?: number | null;
     governing_vsitb?: number | null;
     governing_direction?: string | null;
+    design_wind_speed_basis?: string;
+    evidence_references?: string[];
+    disclaimer?: string;
     warnings?: string[];
   };
 };
+
+function windStandardLabel(standard?: WorkflowResult["standard"]) {
+  const name = standard?.name?.trim();
+  const edition = standard?.edition?.trim();
+
+  if (!name) {
+    if (!edition) return "AS/NZS 1170.2:2021";
+    return edition.includes("AS/NZS 1170.2")
+      ? edition
+      : `AS/NZS 1170.2:${edition}`;
+  }
+  if (!edition || name.includes(edition)) return name;
+  if (edition.includes(name)) return edition;
+  return `${name}:${edition}`;
+}
 
 type Stage = {
   key: string;
@@ -122,6 +140,7 @@ export function WindSiteWorkflow({
     () => new Set(Object.keys(workflow?.calculationIds ?? {})),
     [workflow],
   );
+  const linkedStageCount = completedKeys.size;
 
   async function run(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -184,27 +203,31 @@ export function WindSiteWorkflow({
     if (roofShape) inputs.roof_shape = roofShape;
     if (roofPitch) inputs.roof_pitch_deg = Number(roofPitch);
 
-    const supabase = createClient();
-    const { data, error } = await supabase.functions.invoke(
-      "opencalcs-run-wind-workflow",
-      {
-        body: {
-          projectId,
-          inputs,
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.functions.invoke(
+        "opencalcs-run-wind-workflow",
+        {
+          body: {
+            projectId,
+            inputs,
+          },
         },
-      },
-    );
+      );
 
-    setBusy(false);
+      if (error || data?.error) {
+        setMessage(error?.message || data?.error || "Wind assessment failed.");
+        return;
+      }
 
-    if (error || data?.error) {
-      setMessage(error?.message || data?.error || "Wind assessment failed.");
-      return;
+      setWorkflow(data as WorkflowResult);
+      setMessage("Wind assessment completed and linked calculation graph saved.");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Wind assessment failed.");
+    } finally {
+      setBusy(false);
     }
-
-    setWorkflow(data as WorkflowResult);
-    setMessage("Wind assessment completed and linked calculation graph saved.");
-    router.refresh();
   }
 
   const region = workflow?.result?.wind_region_assessment?.wind_region;
@@ -212,31 +235,50 @@ export function WindSiteWorkflow({
   const msRange = variableRange(workflow, "Ms");
   const mtRange = variableRange(workflow, "Mt");
   const governingVdes = workflow?.result?.governing_vdes_mps;
+  const regionalWindSpeed =
+    workflow?.result?.regional_wind_speed_assessment?.regional_wind_speed_mps ??
+    workflow?.result?.regional_wind_speed_assessment?.vr_mps;
+  const warnings = [
+    ...(workflow?.result?.wind_region_assessment?.warnings ?? []),
+    ...(workflow?.result?.warnings ?? []),
+  ].filter((warning, index, all) => all.indexOf(warning) === index);
+  const designWindSpeedBasis = workflow?.result?.design_wind_speed_basis?.trim();
+  const workflowDisclaimer = workflow?.result?.disclaimer?.trim();
+  const evidenceReferences = [...new Set(
+    (workflow?.result?.evidence_references ?? [])
+      .map((reference) => reference.trim())
+      .filter(Boolean),
+  )];
 
   return (
-    <section className="wind-workflow-card" id="add-calculation">
+    <section
+      className={workflow ? "wind-workflow-card has-results" : "wind-workflow-card"}
+      id="add-calculation"
+    >
       <div className="wind-workflow-heading">
         <div>
-          <p className="eyebrow">OpenWind · AS/NZS 1170.2:2021</p>
+          <p className="eyebrow">
+            OpenWind · {windStandardLabel(workflow?.standard)}
+          </p>
           <h2>Site wind assessment</h2>
           <p>
             Start with the site and building. OpenCalcs runs the evidence workflow once,
             then stores each engineering stage as a linked calculation.
           </p>
         </div>
-        <span className="workflow-badge">6 linked stages</span>
+        <span className="workflow-badge" aria-live="polite">
+          {busy
+            ? "Assessment running"
+            : workflow
+              ? `${linkedStageCount} linked ${linkedStageCount === 1 ? "stage" : "stages"}`
+              : "Ready to assess"}
+        </span>
       </div>
 
-      <div className="wind-stage-strip" aria-label="Wind assessment stages">
+      <div className="wind-stage-strip" aria-label="Wind assessment stages" aria-busy={busy}>
         {stages.map((stage) => (
           <div
-            className={
-              completedKeys.has(stage.key)
-                ? "wind-stage complete"
-                : busy
-                  ? "wind-stage running"
-                  : "wind-stage"
-            }
+            className={completedKeys.has(stage.key) ? "wind-stage complete" : "wind-stage"}
             key={stage.key}
           >
             <span>{completedKeys.has(stage.key) ? "✓" : stage.label.split(" · ")[0]}</span>
@@ -433,7 +475,11 @@ export function WindSiteWorkflow({
 
         <div className="wind-run-row">
           <div>
-            {message ? <p className="form-message">{message}</p> : null}
+            {message ? (
+              <p className="form-message" role="status" aria-live="polite">
+                {message}
+              </p>
+            ) : null}
           </div>
           <button className="button button-primary" type="submit" disabled={busy}>
             {busy ? "Running site assessment…" : "Run site wind assessment"}
@@ -449,7 +495,8 @@ export function WindSiteWorkflow({
               <h3>Assessment result</h3>
             </div>
             <span>
-              {workflow.plugin?.id} {workflow.plugin?.version}
+              {workflow.plugin?.id || "OpenWind"}
+              {workflow.plugin?.version ? ` · v${workflow.plugin.version}` : ""}
             </span>
           </div>
 
@@ -458,6 +505,22 @@ export function WindSiteWorkflow({
               <small>Wind region</small>
               <strong>{region || "Review required"}</strong>
               <span>{workflow.result?.wind_region_assessment?.confidence || "—"} confidence</span>
+            </article>
+            <article>
+              <small>Regional speed V<sub>R</sub></small>
+              <strong>
+                {typeof regionalWindSpeed === "number" ? regionalWindSpeed.toFixed(1) : "—"}
+              </strong>
+              <span>m/s · regional wind speed</span>
+            </article>
+            <article>
+              <small>Site speed V<sub>sit,b</sub></small>
+              <strong>
+                {typeof workflow.result?.governing_vsitb === "number"
+                  ? workflow.result.governing_vsitb.toFixed(1)
+                  : "—"}
+              </strong>
+              <span>m/s · before direction adjustment</span>
             </article>
             <article>
               <small>Mz,cat</small>
@@ -487,6 +550,95 @@ export function WindSiteWorkflow({
               </span>
             </article>
           </div>
+          {(workflow.result?.design_wind_speeds?.length || warnings.length) ? (
+            <div className="wind-result-details">
+              {workflow.result?.design_wind_speeds?.length ? (
+                <section className="wind-face-speeds" aria-labelledby="wind-face-speeds-title">
+                  <div className="wind-detail-heading">
+                    <h4 id="wind-face-speeds-title">Design speed by face</h4>
+                    <span>V<sub>des,θ</sub> · m/s</span>
+                  </div>
+                  <ul>
+                    {workflow.result.design_wind_speeds.map((face, index) => (
+                      <li key={`${face.face ?? "face"}-${index}`}>
+                        <span>{face.face || `Face ${index + 1}`}</span>
+                        <strong>
+                          {typeof (face.design_wind_speed_mps ?? face.vdes_theta_mps) ===
+                          "number"
+                            ? (face.design_wind_speed_mps ?? face.vdes_theta_mps)!.toFixed(1)
+                            : "—"}
+                        </strong>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              {warnings.length ? (
+                <section className="wind-result-warnings" aria-labelledby="wind-warnings-title">
+                  <h4 id="wind-warnings-title">Review notes <span>{warnings.length}</span></h4>
+                  <ul>
+                    {warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}
+                  </ul>
+                </section>
+              ) : null}
+            </div>
+          ) : null}
+
+          {designWindSpeedBasis || workflowDisclaimer || evidenceReferences.length ? (
+            <details className="wind-result-basis">
+              <summary>
+                <span>Calculation basis and references</span>
+                {evidenceReferences.length ? (
+                  <small>{evidenceReferences.length} references</small>
+                ) : null}
+              </summary>
+              <div className="wind-result-basis-content">
+                {designWindSpeedBasis ? (
+                  <section>
+                    <h4>Design speed basis</h4>
+                    <p>{designWindSpeedBasis}</p>
+                  </section>
+                ) : null}
+                {workflowDisclaimer ? (
+                  <p className="wind-result-scope">
+                    <strong>Scope</strong>
+                    {workflowDisclaimer}
+                  </p>
+                ) : null}
+                {evidenceReferences.length ? (
+                  <section>
+                    <h4>Evidence references</h4>
+                    <ul>
+                      {evidenceReferences.map((reference) => (
+                        <li key={reference}>{reference}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+              </div>
+            </details>
+          ) : null}
+
+          <details className="wind-result-record">
+            <summary>Calculation record</summary>
+            <dl>
+              <div>
+                <dt>Design standard</dt>
+                <dd>{windStandardLabel(workflow.standard)}</dd>
+              </div>
+              <div>
+                <dt>Engine</dt>
+                <dd>
+                  {workflow.plugin?.id || "OpenWind"}
+                  {workflow.plugin?.version ? ` · v${workflow.plugin.version}` : ""}
+                </dd>
+              </div>
+              <div>
+                <dt>Workflow ID</dt>
+                <dd><code>{workflow.workflowId}</code></dd>
+              </div>
+            </dl>
+          </details>
         </div>
       ) : null}
     </section>

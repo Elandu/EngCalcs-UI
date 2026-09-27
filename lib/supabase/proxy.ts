@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/config";
+import { safeAuthRedirectPath } from "@/lib/safe-auth-redirect";
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -33,9 +34,18 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname === "/drawing-review.html";
 
   if (!claims && protectedRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+    const projectPath = request.nextUrl.pathname;
+    const preserveCalculationAnchor =
+      /^\/dashboard\/projects\/[^/]+$/.test(projectPath) &&
+      projectPath !== "/dashboard/projects/new" &&
+      request.nextUrl.searchParams.has("calculation");
+    const returnTo = `${projectPath}${request.nextUrl.search}${preserveCalculationAnchor ? "#calculations" : ""}`;
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.search = "";
+    loginUrl.searchParams.set("next", safeAuthRedirectPath(returnTo));
+
+    return NextResponse.redirect(loginUrl);
   }
 
   if (request.nextUrl.pathname === "/drawing-review.html") {
@@ -62,6 +72,5 @@ export async function updateSession(request: NextRequest) {
       }
     }
   }
-
   return response;
 }

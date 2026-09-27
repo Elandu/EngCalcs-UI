@@ -214,6 +214,58 @@ function stageSummary(stage: Stage): Array<[string, string]> {
   ];
 }
 
+type CalculationBasisEntry = {
+  label: string;
+  formula: string | null;
+  inputs: string[];
+  details: string[];
+  calculation: string | null;
+  reference: string | null;
+};
+
+function optionalText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function textList(value: unknown): string[] {
+  return array(value)
+    .map(optionalText)
+    .filter((item): item is string => Boolean(item));
+}
+
+function stageCalculationBasis(stage: Stage) {
+  const result = object(stage.latestRun.result_json);
+  const entries = array(result.variables)
+    .map((value): CalculationBasisEntry | null => {
+      const row = object(value);
+      const variable = optionalText(row.variable);
+      const label = optionalText(row.label) ?? variable ?? "Calculated value";
+      const direction = optionalText(row.direction);
+      const entry = {
+        label: direction ? `${label} · ${direction}` : label,
+        formula: optionalText(row.formula_basis),
+        inputs: textList(row.calculation_inputs),
+        details: textList(row.detail_items),
+        calculation: optionalText(row.calculation_result),
+        reference: optionalText(row.source_reference),
+      };
+      return entry.formula || entry.inputs.length || entry.details.length || entry.calculation || entry.reference
+        ? entry
+        : null;
+    })
+    .filter((entry): entry is CalculationBasisEntry => Boolean(entry));
+  const formula =
+    optionalText(result.design_wind_speed_basis) ?? optionalText(result.formula_basis);
+  const variableReferences = new Set(
+    entries.map((entry) => entry.reference).filter((item): item is string => Boolean(item)),
+  );
+  const references = textList(result.evidence_references)
+    .filter((reference, index, all) => all.indexOf(reference) === index)
+    .filter((reference) => !variableReferences.has(reference));
+
+  return { entries, formula, references };
+}
+
 function reviewLabel(review: Review | null) {
   if (!review) return "Draft";
   if (review.status === "approved") return "Approved";
@@ -280,19 +332,24 @@ export function WindWorkflowReview({
     setBusy(functionName);
     setMessage("");
 
-    const supabase = createClient();
-    const { data, error } = await supabase.functions.invoke(functionName, { body });
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.functions.invoke(functionName, { body });
 
-    setBusy("");
+      if (error || data?.error) {
+        setMessage(error?.message || data?.error || "Action failed.");
+        return null;
+      }
 
-    if (error || data?.error) {
-      setMessage(error?.message || data?.error || "Action failed.");
+      setMessage(successMessage);
+      router.refresh();
+      return data;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Action failed.");
       return null;
+    } finally {
+      setBusy("");
     }
-
-    setMessage(successMessage);
-    router.refresh();
-    return data;
   }
 
   async function reviewAction(action: "submit" | "approve" | "request_changes") {
@@ -409,29 +466,77 @@ export function WindWorkflowReview({
       </div>
 
       <div className="workflow-stage-review-list">
-        {stages.map((stage) => (
-          <article className="workflow-stage-review" key={stage.calculationId}>
-            <div className="workflow-stage-review-heading">
-              <div>
-                <small>{stage.stageKey.replaceAll("_", " ")}</small>
-                <h3>{stage.title}</h3>
-              </div>
-              <div className="stage-review-meta">
-                <span className={`review-chip ${stage.latestReview?.status ?? ""}`}>
-                  {reviewLabel(stage.latestReview)}
-                </span>
-                <span>Run {stage.latestRun.run_sequence}</span>
-              </div>
-            </div>
-
-            <div className="stage-summary-grid">
-              {stageSummary(stage).map(([label, value]) => (
-                <div key={label}>
-                  <small>{label}</small>
-                  <strong>{value}</strong>
+        {stages.map((stage) => {
+          const basis = stageCalculationBasis(stage);
+          return (
+            <article className="workflow-stage-review" key={stage.calculationId}>
+              <div className="workflow-stage-review-heading">
+                <div>
+                  <small>{stage.stageKey.replaceAll("_", " ")}</small>
+                  <h3>{stage.title}</h3>
                 </div>
-              ))}
-            </div>
+                <div className="stage-review-meta">
+                  <span className={`review-chip ${stage.latestReview?.status ?? ""}`}>
+                    {reviewLabel(stage.latestReview)}
+                  </span>
+                  <span>Run {stage.latestRun.run_sequence}</span>
+                </div>
+              </div>
+
+              <div className="stage-summary-grid">
+                {stageSummary(stage).map(([label, value]) => (
+                  <div key={label}>
+                    <small>{label}</small>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+
+              {basis.entries.length || basis.formula || basis.references.length ? (
+                <details className="stage-calculation-basis">
+                  <summary>Calculation basis and references</summary>
+                  <div className="stage-calculation-basis-content">
+                    {basis.formula ? (
+                      <div className="stage-basis-formula">
+                        <strong>Design wind speed basis</strong>
+                        <p>{basis.formula}</p>
+                      </div>
+                    ) : null}
+                    {basis.entries.map((entry, index) => (
+                      <article key={`${entry.label}-${index}`}>
+                        <h4>{entry.label}</h4>
+                        {entry.formula ? (
+                          <p><strong>Formula</strong> <code>{entry.formula}</code></p>
+                        ) : null}
+                        {entry.inputs.length ? (
+                          <p><strong>Calculation inputs</strong> {entry.inputs.join(" · ")}</p>
+                        ) : null}
+                        {entry.calculation ? (
+                          <p><strong>Calculated result</strong> {entry.calculation}</p>
+                        ) : null}
+                        {entry.details.length ? (
+                          <ul>{entry.details.map((detail, detailIndex) => (
+                            <li key={`${detail}-${detailIndex}`}>{detail}</li>
+                          ))}</ul>
+                        ) : null}
+                        {entry.reference ? (
+                          <p className="stage-basis-reference">
+                            <strong>Source reference</strong> {entry.reference}
+                          </p>
+                        ) : null}
+                      </article>
+                    ))}
+                    {basis.references.length ? (
+                      <div className="stage-basis-references">
+                        <strong>Evidence references</strong>
+                        <ul>{basis.references.map((reference) => (
+                          <li key={reference}>{reference}</li>
+                        ))}</ul>
+                      </div>
+                    ) : null}
+                  </div>
+                </details>
+              ) : null}
 
             {stage.latestReview?.review_note ? (
               <div className="review-note">
@@ -545,7 +650,8 @@ export function WindWorkflowReview({
               </form>
             ) : null}
           </article>
-        ))}
+          );
+        })}
       </div>
 
       <div className="workflow-decision-panel">

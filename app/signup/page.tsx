@@ -1,8 +1,17 @@
 import Link from "next/link";
 import { AuthForm } from "@/components/auth-form";
 import { Brand } from "@/components/brand";
+import { safeAuthRedirectPath } from "@/lib/safe-auth-redirect";
 
-export default function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const query = await searchParams;
+  const next = Array.isArray(query.next) ? query.next[0] : query.next;
+  const redirectTo = safeAuthRedirectPath(next ?? null);
+
   return (
     <main className="auth-shell">
       <div className="auth-top">
@@ -13,7 +22,7 @@ export default function SignupPage() {
         <p className="eyebrow">Early access</p>
         <h1>Create your engineering workspace</h1>
         <p>Start with a private workspace for projects and transparent calculations.</p>
-        <AuthForm mode="signup" />
+        <AuthForm mode="signup" redirectTo={redirectTo} />
       </section>
     </main>
   );

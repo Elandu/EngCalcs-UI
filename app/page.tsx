@@ -102,7 +102,7 @@ export default function Home() {
                     </div>
                   </section>
                   <section className="calc-panel result-panel">
-                    <div className="result-status">PASS</div>
+                    <div className="result-status">SAMPLE</div>
                     <small>Vdes,θ — Front</small>
                     <div className="result-value">43.0 <span>m/s</span></div>
                     <div className="equation">
@@ -115,7 +115,7 @@ export default function Home() {
                 </div>
                 <div className="audit-line">
                   <span className="audit-dot" />
-                  All inputs traced · 2 linked values · no unresolved warnings
+                  Illustrative values only · no project calculation has been run
                 </div>
               </div>
             </div>

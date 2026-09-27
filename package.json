@@ -1,12 +1,14 @@
 {
   "name": "opencalcs-ui",
-  "version": "0.1.0",
+  "version": "0.2.0-alpha.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "node --test lib/safe-auth-redirect.test.mjs supabase/functions/opencalcs-run-calculation-v2/linked-validation.test.mjs",
+    "test:linked-validation": "node --test supabase/functions/opencalcs-run-calculation-v2/linked-validation.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",

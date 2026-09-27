@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ApiKeyManager } from "@/components/api-key-manager";
-import { Brand } from "@/components/brand";
+import { WorkspaceHeader } from "@/components/workspace-header";
 import { createClient } from "@/lib/supabase/server";
+import { authPageHref } from "@/lib/safe-auth-redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export default async function ApiKeysPage() {
   const { data: claimsData } = await supabase.auth.getClaims();
 
   if (!claimsData?.claims?.sub) {
-    redirect("/login");
+    redirect(authPageHref("login", "/dashboard/settings/api-keys"));
   }
 
   const { data: memberships, error: membershipError } = await supabase
@@ -47,10 +47,7 @@ export default async function ApiKeysPage() {
 
   return (
     <main className="dashboard-shell">
-      <header className="dashboard-header">
-        <Brand />
-        <Link href="/dashboard">Back to projects</Link>
-      </header>
+      <WorkspaceHeader area="developer" canManageApiKeys />
 
       <section className="dashboard-workspace narrow-settings">
         <div className="dashboard-title-row">

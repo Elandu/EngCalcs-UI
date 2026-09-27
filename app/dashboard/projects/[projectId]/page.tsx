@@ -1,10 +1,11 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { Brand } from "@/components/brand";
+import { CalculationLauncher } from "@/components/calculation-launcher";
 import { WindSiteWorkflow } from "@/components/wind-site-workflow";
 import { WindWorkflowReview } from "@/components/wind-workflow-review";
+import { WorkspaceHeader } from "@/components/workspace-header";
 import { createClient } from "@/lib/supabase/server";
+import { authPageHref } from "@/lib/safe-auth-redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -14,18 +15,60 @@ function record(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function resultEntries(value: unknown) {
+  const envelope = record(value);
+  const nested = record(envelope.result);
+  const output = Object.keys(nested).length ? nested : envelope;
+  return Object.entries(output)
+    .filter(([key]) => key !== "_provenance")
+    .slice(0, 6);
+}
+
+function displayValue(value: unknown) {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function linkedInputSnapshot(
+  provenanceJson: unknown,
+  link: {
+    source_calculation_id: string;
+    source_output_path: string;
+    target_input_path: string;
+  },
+) {
+  const linkedInputs = record(provenanceJson).linked_inputs;
+  if (!Array.isArray(linkedInputs)) return null;
+
+  return linkedInputs.map(record).find((item) =>
+    item.source_calculation_id === link.source_calculation_id &&
+    item.source_output_path === link.source_output_path &&
+    item.target_input_path === link.target_input_path
+  ) ?? null;
+}
+
 export default async function ProjectPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const { projectId } = await params;
+  const [{ projectId }, query] = await Promise.all([params, searchParams]);
+  const initialCalculationId = Array.isArray(query.calculation)
+    ? query.calculation[0]
+    : query.calculation;
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub;
 
   if (!userId) {
-    redirect("/login");
+    const projectPath = `/dashboard/projects/${encodeURIComponent(projectId)}`;
+    const next = initialCalculationId
+      ? `${projectPath}?${new URLSearchParams({ calculation: initialCalculationId }).toString()}#calculations`
+      : projectPath;
+    redirect(authPageHref("login", next));
   }
 
   const { data: project, error: projectError } = await supabase
@@ -75,12 +118,56 @@ export default async function ProjectPage({
   const { data: links, error: linkError } = calculationIds.length
     ? await supabase
         .from("calculation_links")
-        .select("id, source_calculation_id, target_calculation_id")
+        .select(
+          "id, source_calculation_id, source_output_path, target_calculation_id, target_input_path",
+        )
         .in("source_calculation_id", calculationIds)
     : { data: [], error: null };
 
   if (linkError) {
     throw new Error(`Unable to load calculation graph: ${linkError.message}`);
+  }
+
+  const calculationTitles = new Map(
+    calculationRows.map((calculation) => [calculation.id, calculation.title]),
+  );
+
+  const standaloneCalculations = calculationRows.filter(
+    (calculation) => !calculation.stage_key,
+  );
+  const standaloneCalculationIds = standaloneCalculations.map(
+    (calculation) => calculation.id,
+  );
+  const { data: standaloneRunRows, error: standaloneRunError } =
+    standaloneCalculationIds.length
+      ? await supabase
+          .from("calculation_runs")
+          .select(
+            "id, calculation_id, run_sequence, input_json, result_json, provenance_json, created_at",
+          )
+          .in("calculation_id", standaloneCalculationIds)
+          .order("created_at", { ascending: false })
+          .limit(200)
+      : { data: [], error: null };
+
+  if (standaloneRunError) {
+    throw new Error(`Unable to load calculation results: ${standaloneRunError.message}`);
+  }
+
+  type StandaloneRun = {
+    id: string;
+    calculation_id: string;
+    run_sequence: number;
+    input_json: unknown;
+    result_json: unknown;
+    provenance_json: unknown;
+    created_at: string;
+  };
+  const latestStandaloneRuns = new Map<string, StandaloneRun>();
+  for (const run of (standaloneRunRows ?? []) as StandaloneRun[]) {
+    if (!latestStandaloneRuns.has(run.calculation_id)) {
+      latestStandaloneRuns.set(run.calculation_id, run);
+    }
   }
 
   const workflowIds = calculationRows
@@ -304,12 +391,50 @@ export default async function ProjectPage({
     reports = reportRows ?? [];
   }
 
+  const calculationById = new Map(
+    calculationRows.map((calculation) => [calculation.id, calculation]),
+  );
+  const standaloneLinkRuns = ((standaloneRunRows ?? []) as StandaloneRun[]).flatMap((run) => {
+    const calculation = calculationById.get(run.calculation_id);
+    if (!calculation) return [];
+    return [{
+      calculationId: calculation.id,
+      calculationDefinitionId: calculation.calculation_definition_id,
+      title: calculation.title,
+      runId: run.id,
+      runSequence: run.run_sequence,
+      createdAt: run.created_at,
+      result: run.result_json,
+    }];
+  });
+  const workflowLinkRuns = (workflowStages ?? []).flatMap((stage) => {
+    const calculation = calculationById.get(stage.calculationId);
+    if (!calculation) return [];
+    return stage.history.map((run) => ({
+      calculationId: calculation.id,
+      calculationDefinitionId: calculation.calculation_definition_id,
+      title: calculation.title,
+      runId: run.id,
+      runSequence: run.run_sequence,
+      createdAt: run.created_at,
+      result: run.result_json,
+    }));
+  });
+  const linkSourceRuns = [...standaloneLinkRuns, ...workflowLinkRuns].sort(
+    (left, right) => right.createdAt.localeCompare(left.createdAt),
+  );
+
   return (
     <main className="dashboard-shell">
-      <header className="dashboard-header">
-        <Brand />
-        <Link href="/dashboard">Back to projects</Link>
-      </header>
+      <WorkspaceHeader
+        area="projects"
+        canManageApiKeys={membership.role === "owner" || membership.role === "admin"}
+        currentProject={{
+          id: project.id,
+          name: project.name,
+          projectNumber: project.project_number,
+        }}
+      />
 
       <section className="dashboard-workspace">
         <div className="dashboard-title-row">
@@ -358,6 +483,66 @@ export default async function ProjectPage({
           />
         </details>
 
+        <details
+          className="project-calculation-disclosure"
+          id="calculations"
+          open={Boolean(initialCalculationId)}
+        >
+          <summary>Add a standalone calculation</summary>
+          <CalculationLauncher
+            projectId={project.id}
+            initialCalculationId={initialCalculationId}
+            sourceRuns={linkSourceRuns}
+          />
+        </details>
+
+        {standaloneCalculations.length ? (
+          <section className="project-list-card calculation-run-list" aria-labelledby="calculation-results-title">
+            <div className="project-list-header">
+              <div>
+                <h2 id="calculation-results-title">Calculation results</h2>
+                <p>Latest saved outputs with their input and provenance records.</p>
+              </div>
+            </div>
+            <div className="calculation-result-grid">
+              {standaloneCalculations.map((calculation) => {
+                const latestRun = latestStandaloneRuns.get(calculation.id);
+                return (
+                  <article className="calculation-result-card" key={calculation.id}>
+                    <header>
+                      <div>
+                        <small>{calculation.calculation_definition_id} · Run {latestRun?.run_sequence ?? "—"}</small>
+                        <h3>{calculation.title}</h3>
+                      </div>
+                      <time dateTime={latestRun?.created_at}>
+                        {latestRun ? new Date(latestRun.created_at).toLocaleDateString("en-AU") : "No run"}
+                      </time>
+                    </header>
+                    {latestRun ? (
+                      <>
+                        <dl className="calculation-result-values">
+                          {resultEntries(latestRun.result_json).map(([key, value]) => (
+                            <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{displayValue(value)}</dd></div>
+                          ))}
+                        </dl>
+                        <details className="calculation-run-record">
+                          <summary>View full run record</summary>
+                          <div>
+                            <h4>Inputs</h4>
+                            <pre>{JSON.stringify(latestRun.input_json, null, 2)}</pre>
+                            <h4>Result and provenance</h4>
+                            <pre>{JSON.stringify({ result: latestRun.result_json, provenance: latestRun.provenance_json }, null, 2)}</pre>
+                          </div>
+                        </details>
+                      </>
+                    ) : <p className="calculation-links-empty">No saved run is available for this calculation.</p>}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
         <div className="project-list-card">
           <div className="project-list-header">
             <div>
@@ -405,6 +590,71 @@ export default async function ProjectPage({
               <p>Start the Wind site assessment to create the first linked workflow.</p>
             </div>
           )}
+
+          <section className="calculation-links" aria-labelledby="calculation-links-title">
+            <div className="calculation-links-heading">
+              <div>
+                <h3 id="calculation-links-title">Data links</h3>
+                <p>Trace each value from its source output to the input that uses it.</p>
+              </div>
+              <span>{links?.length ?? 0} links</span>
+            </div>
+            {links?.length ? (
+              <ul>
+                {links.map((link) => {
+                  const targetRun = latestStandaloneRuns.get(link.target_calculation_id);
+                  const snapshot = linkedInputSnapshot(targetRun?.provenance_json, link);
+                  const sourceRunId = typeof snapshot?.source_run_id === "string"
+                    ? snapshot.source_run_id
+                    : null;
+                  const sourceRunSequence = typeof snapshot?.source_run_sequence === "number"
+                    ? snapshot.source_run_sequence
+                    : null;
+                  const sourceValue = snapshot?.source_value;
+                  const sourceUnit = typeof snapshot?.source_unit === "string"
+                    ? snapshot.source_unit
+                    : "";
+
+                  return (
+                    <li key={link.id}>
+                      <div className="calculation-link-endpoint">
+                        <strong>
+                          {calculationTitles.get(link.source_calculation_id) ||
+                            `Calculation ${link.source_calculation_id.slice(0, 8)}`}
+                        </strong>
+                        <code>Output · {link.source_output_path}</code>
+                        {snapshot ? (
+                          <small>
+                            Source run {sourceRunSequence ?? "—"}
+                            {sourceRunId ? ` · ${sourceRunId.slice(0, 8)}` : ""}
+                            {` · captured ${displayValue(sourceValue)}${sourceUnit ? ` ${sourceUnit}` : ""}`}
+                          </small>
+                        ) : null}
+                      </div>
+                      <span className="calculation-link-arrow" aria-hidden="true">→</span>
+                      <div className="calculation-link-endpoint">
+                        <strong>
+                          {calculationTitles.get(link.target_calculation_id) ||
+                            `Calculation ${link.target_calculation_id.slice(0, 8)}`}
+                        </strong>
+                        <code>Input · {link.target_input_path}</code>
+                        {targetRun ? (
+                          <small>
+                            Target run {targetRun.run_sequence} · {targetRun.id.slice(0, 8)}
+                          </small>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="calculation-links-empty">
+                No data links saved yet. When values are linked, their source and destination will
+                appear here.
+              </p>
+            )}
+          </section>
         </div>
       </section>
     </main>

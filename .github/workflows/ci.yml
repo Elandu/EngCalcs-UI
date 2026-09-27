@@ -24,6 +24,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Tests
+        run: npm test
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check linked calculation function
+        run: deno check --node-modules-dir=auto supabase/functions/opencalcs-run-calculation-v2/index.ts
+
       - name: Lint
         run: npm run lint
 

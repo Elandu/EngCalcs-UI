@@ -1,0 +1,21 @@
+.calculation-link-builder{margin-top:24px;padding:22px;border:1px solid #d8e2da;border-radius:14px;background:#f9fbf8}
+.calculation-link-builder-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+.calculation-link-builder-heading h3{margin:0;font-size:20px;letter-spacing:-.03em}
+.calculation-link-builder-heading .eyebrow{margin:0 0 6px}
+.calculation-link-builder-heading p:last-child{margin:6px 0 0;color:#65766f;font-size:13px}
+.calculation-link-builder-heading>span{padding:6px 10px;border-radius:999px;background:#e7f5eb;color:#0f5b43;font-size:11px;font-weight:700;white-space:nowrap}
+.calculation-link-builder-controls{display:grid;grid-template-columns:minmax(190px,1fr) minmax(200px,1.3fr) minmax(180px,1fr) auto;align-items:end;gap:12px;margin-top:18px}
+.calculation-link-builder-controls>label{display:grid;gap:6px;color:#31443f;font-size:12px;font-weight:700}
+.calculation-link-builder-controls select{width:100%;min-width:0;border:1px solid #cbd7cf;border-radius:8px;background:#fff;padding:10px 11px;color:#10231e;font:inherit;font-size:13px}
+.calculation-link-builder-controls .button{padding:10px 14px;white-space:nowrap}
+.calculation-link-error{grid-column:1/-1;margin:0;color:#a53121;font-size:12px}
+.calculation-link-draft-list{display:grid;gap:8px;margin:16px 0 0;padding:0;list-style:none}
+.calculation-link-draft-list li{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto;align-items:center;gap:14px;padding:12px 14px;border:1px solid #dce6de;border-radius:10px;background:#fff}
+.calculation-link-draft-list li>div{display:grid;gap:3px;min-width:0}
+.calculation-link-draft-list strong{overflow:hidden;color:#173d32;font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.calculation-link-draft-list small{color:#6b7d75;font-size:11px}
+.calculation-link-draft-list li>span{color:#72877d;font-size:17px}
+.calculation-link-draft-list .schema-remove-row{grid-column:auto;grid-row:auto;margin:0;padding:5px 8px}
+.calculation-link-note{margin:14px 0 0;color:#65766f;font-size:11px}
+@media(max-width:960px){.calculation-link-builder-controls{grid-template-columns:1fr 1fr}.calculation-link-builder-controls>.button{justify-self:start}}
+@media(max-width:640px){.calculation-link-builder{padding:16px}.calculation-link-builder-controls{grid-template-columns:1fr}.calculation-link-draft-list li{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.calculation-link-draft-list .schema-remove-row{grid-column:1/-1;justify-self:end}}

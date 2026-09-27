@@ -1,0 +1,25 @@
+project_id = "amfmmkonklwcohbsdiic"
+
+[functions.opencalcs-run-calculation-v2]
+verify_jwt = true
+
+[functions.opencalcs-api-keys]
+verify_jwt = true
+
+[functions.opencalcs-key-verify]
+verify_jwt = false
+
+[functions.opencalcs-run-calculation]
+verify_jwt = true
+
+[functions.opencalcs-run-wind-workflow]
+verify_jwt = true
+
+[functions.opencalcs-review-wind-workflow]
+verify_jwt = true
+
+[functions.opencalcs-issue-wind-workflow]
+verify_jwt = true
+
+[functions.opencalcs-download-report]
+verify_jwt = true

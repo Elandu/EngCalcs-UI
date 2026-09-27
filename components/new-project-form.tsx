@@ -30,28 +30,33 @@ export function NewProjectForm({
     setBusy(true);
     setMessage("");
 
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("projects")
-      .insert({
-        organisation_id: organisationId,
-        project_number: projectNumber.trim() || null,
-        name: name.trim(),
-        address: address.trim() || null,
-        standards_region: "AU",
-        created_by: userId,
-      })
-      .select("id")
-      .single();
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("projects")
+        .insert({
+          organisation_id: organisationId,
+          project_number: projectNumber.trim() || null,
+          name: name.trim(),
+          address: address.trim() || null,
+          standards_region: "AU",
+          created_by: userId,
+        })
+        .select("id")
+        .single();
 
-    if (error || !data) {
+      if (error || !data) {
+        setMessage(error?.message || "Unable to create project.");
+        return;
+      }
+
+      router.push(`/dashboard/projects/${data.id}`);
+      router.refresh();
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : "Unable to create project.");
+    } finally {
       setBusy(false);
-      setMessage(error?.message || "Unable to create project.");
-      return;
     }
-
-    router.push(`/dashboard/projects/${data.id}`);
-    router.refresh();
   }
 
   return (
@@ -106,7 +111,7 @@ export function NewProjectForm({
         </button>
       </div>
 
-      {message ? <p className="form-message">{message}</p> : null}
+      {message ? <p className="form-message" role="alert">{message}</p> : null}
     </form>
   );
 }
