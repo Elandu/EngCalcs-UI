@@ -9,7 +9,10 @@ type Definition = {
   name: string;
   description: string;
   category: string;
+  version?: string;
   standard?: { name?: string; edition?: string } | null;
+  plugin?: { id?: string; name?: string; version?: string; revision?: string | null } | null;
+  runtime?: { name?: string; version?: string; revision?: string | null } | null;
   input_schema?: {
     required?: string[];
     properties?: Record<string, { type?: string; unit?: string; description?: string }>;
@@ -20,6 +23,10 @@ type Project = { id: string; name: string; project_number: string | null; addres
 
 function titleCase(value: string) {
   return value.replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function reportedRevision(value?: string | null) {
+  return value && value !== "unknown" ? value : "Not reported";
 }
 
 export function CalculationLibrary({
@@ -44,6 +51,8 @@ export function CalculationLibrary({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
     let active = true;
     fetch("/api/calculations", { cache: "no-store" })
@@ -58,10 +67,12 @@ export function CalculationLibrary({
           setSelectedId(items[0]?.id ?? "");
         }
       })
-      .catch((cause: Error) => { if (active) setError(cause.message); })
+      .catch((cause: unknown) => {
+        if (active) setError(cause instanceof Error ? cause.message : "Unable to load calculations.");
+      })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [reloadKey]);
 
   const categories = useMemo(
     () => [...new Set(definitions.map((item) => item.category).filter(Boolean))].sort(),
@@ -79,6 +90,12 @@ export function CalculationLibrary({
   function useCalculation() {
     if (!selected || !projectId) return;
     router.push(`/dashboard/projects/${projectId}?calculation=${encodeURIComponent(selected.id)}#calculations`);
+  }
+
+  function retryCatalog() {
+    setLoading(true);
+    setError("");
+    setReloadKey((key) => key + 1);
   }
 
   return (
@@ -135,7 +152,12 @@ export function CalculationLibrary({
       </div>
 
       {loading ? <div className="project-list-empty">Loading calculation library…</div> : null}
-      {!loading && error ? <div className="library-error" role="alert">{error}</div> : null}
+      {!loading && error ? (
+        <div className="library-error" role="alert">
+          <p>{error}</p>
+          <button className="library-retry-button" type="button" onClick={retryCatalog}>Try again</button>
+        </div>
+      ) : null}
       {!loading && !error && !definitions.length ? (
         <div className="project-list-empty"><h2>No calculations available</h2><p>The runtime did not return any calculation definitions.</p></div>
       ) : null}
@@ -159,14 +181,23 @@ export function CalculationLibrary({
               <p>{selected.description}</p>
               <dl>
                 <div><dt>Definition</dt><dd><code>{selected.id}</code></dd></div>
+                <div><dt>Calculation version</dt><dd>{selected.version || "Not reported"}</dd></div>
                 <div><dt>Standard</dt><dd>{selected.standard?.name || "Not specified"}{selected.standard?.edition ? ` · ${selected.standard.edition}` : ""}</dd></div>
                 <div><dt>Category</dt><dd>{titleCase(selected.category || "Engineering")}</dd></div>
+                <div><dt>Engine</dt><dd>{[selected.plugin?.name ? `${selected.plugin.name}${selected.plugin.id ? ` (${selected.plugin.id})` : ""}` : selected.plugin?.id, selected.plugin?.version ? `v${selected.plugin.version}` : ""].filter(Boolean).join(" · ") || "Not reported"}</dd></div>
+                <div><dt>Engine revision</dt><dd><code>{reportedRevision(selected.plugin?.revision)}</code></dd></div>
+                <div><dt>Runtime</dt><dd>{[selected.runtime?.name, selected.runtime?.version ? `v${selected.runtime.version}` : ""].filter(Boolean).join(" · ") || "Not reported"}</dd></div>
+                <div><dt>Runtime revision</dt><dd><code>{reportedRevision(selected.runtime?.revision)}</code></dd></div>
               </dl>
               <h3>Inputs</h3>
               {Object.entries(selected.input_schema?.properties ?? {}).length ? (
                 <ul className="library-input-list">
                   {Object.entries(selected.input_schema?.properties ?? {}).map(([key, schema]) => (
-                    <li key={key}><span>{titleCase(key)}{selected.input_schema?.required?.includes(key) ? <b aria-label="required"> *</b> : null}</span><small>{schema.type || "value"}{schema.unit ? ` · ${schema.unit}` : ""}</small></li>
+                    <li key={key}>
+                      <span className="library-input-name">{titleCase(key)}{selected.input_schema?.required?.includes(key) ? <b aria-label="required"> *</b> : null}</span>
+                      <span className="library-input-meta"><small>{schema.type || "value"}{schema.unit ? ` · ${schema.unit}` : ""}</small></span>
+                      {schema.description ? <span className="library-input-description">{schema.description}</span> : null}
+                    </li>
                   ))}
                 </ul>
               ) : <p className="library-muted">Input details are supplied when the calculation is added.</p>}
