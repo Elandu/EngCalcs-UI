@@ -76,6 +76,9 @@ export default async function DashboardPage() {
               Project data, linked calculations and issue history will stay together here.
             </p>
           </div>
+          <Link className="button button-secondary" href="/dashboard/drawings">
+            Drawing review
+          </Link>
           <Link className="button button-primary" href="/dashboard/projects/new">
             New project
           </Link>

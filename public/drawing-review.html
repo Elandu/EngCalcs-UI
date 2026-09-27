@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101916">
+  <title>Drawing review · OpenCalcs</title>
+  <link rel="stylesheet" href="/drawing-review.css?v=1">
+  <script type="module" src="/drawing-review.js?v=1"></script>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/dashboard/drawings" aria-label="OpenCalcs drawing review">
+        <span class="brand-mark" aria-hidden="true">OC</span>
+        <span><strong>OpenCalcs</strong><small>Drawing review</small></span>
+      </a>
+      <label class="project-name">
+        <span>Drawing set</span>
+        <input id="project-name" value="Untitled drawing set" maxlength="100" autocomplete="off">
+      </label>
+      <div class="topbar-actions">
+        <span id="save-status" class="save-status" role="status">Local workspace</span>
+        <button id="export-pdf" class="button button-secondary" type="button" disabled>Export marked PDF</button>
+      </div>
+    </header>
+
+    <section class="workspace" aria-label="Drawing review workspace">
+      <aside class="rail left-rail" aria-label="Drawing set">
+        <div class="rail-heading">
+          <div>
+            <p class="eyebrow">Project files</p>
+            <h1>Drawings</h1>
+          </div>
+          <span id="document-count" class="count-badge">0</span>
+        </div>
+        <label id="upload-dropzone" class="upload-dropzone">
+          <input id="pdf-files" type="file" accept="application/pdf,.pdf" multiple>
+          <span class="upload-icon" aria-hidden="true">↑</span>
+          <strong>Add PDF drawings</strong>
+          <span>Choose files or drop them here</span>
+          <small>Up to 10 files · 50 MB each</small>
+        </label>
+        <div id="document-list" class="document-list" aria-live="polite"></div>
+        <div class="local-note">
+          <span class="local-dot" aria-hidden="true"></span>
+          <p>PDFs and markups stay in this browser. Calculation runs are saved to the selected OpenCalcs project.</p>
+        </div>
+      </aside>
+
+      <section class="drawing-column" aria-label="PDF drawing">
+        <div class="drawing-toolbar">
+          <div class="toolbar-leading">
+            <label class="active-file-label" for="active-document">Active drawing</label>
+            <select id="active-document" aria-label="Active drawing" disabled></select>
+          </div>
+          <div class="page-controls">
+            <button id="previous-page" class="icon-button" type="button" aria-label="Previous page" disabled>←</button>
+            <span><input id="page-number" type="number" min="1" value="1" aria-label="Page number" disabled> <span id="page-total">/ 0</span></span>
+            <button id="next-page" class="icon-button" type="button" aria-label="Next page" disabled>→</button>
+            <span class="toolbar-divider" aria-hidden="true"></span>
+            <button id="zoom-out" class="icon-button" type="button" aria-label="Zoom out" disabled>−</button>
+            <button id="zoom-fit" class="zoom-label" type="button" disabled>Fit</button>
+            <button id="zoom-in" class="icon-button" type="button" aria-label="Zoom in" disabled>+</button>
+          </div>
+        </div>
+        <div id="viewer-scroll" class="viewer-scroll">
+          <div id="empty-viewer" class="empty-viewer">
+            <div class="empty-sheet" aria-hidden="true"><span>PDF</span><i></i><i></i><i></i></div>
+            <h2>Bring a drawing into the review</h2>
+            <p>Upload one or more PDFs to mark structural elements and connect them to calculation results.</p>
+            <label class="button button-primary" for="pdf-files">Choose drawings</label>
+            <small>Files are processed and saved in this browser.</small>
+          </div>
+          <div id="page-stage" class="page-stage" hidden>
+            <div id="page-frame" class="page-frame">
+              <canvas id="pdf-canvas" aria-label="Rendered PDF page"></canvas>
+              <svg id="annotation-layer" role="img" aria-label="Drawing markups"></svg>
+            </div>
+          </div>
+          <div id="viewer-message" class="viewer-message" role="status" hidden></div>
+        </div>
+        <div class="drawing-footer">
+          <span id="drawing-caption">Drawing markup is saved locally as you work.</span>
+          <span class="keyboard-hint">Select a tool, then mark directly on the page</span>
+        </div>
+      </section>
+
+      <aside class="rail right-rail" aria-label="Markup and calculation details">
+        <section class="panel-section markup-section">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Page markups</p>
+              <h2>Elements</h2>
+            </div>
+            <span id="annotation-count" class="count-badge">0</span>
+          </div>
+          <div class="tool-picker" role="group" aria-label="Markup tool">
+            <button class="tool-button is-active" data-tool="select" type="button"><span aria-hidden="true">↖</span>Select</button>
+            <button class="tool-button" data-tool="beam" type="button"><span aria-hidden="true">╱</span>Beam</button>
+            <button class="tool-button" data-tool="column" type="button"><span aria-hidden="true">⊙</span>Column</button>
+            <button class="tool-button" data-tool="area" type="button"><span aria-hidden="true">▱</span>Area</button>
+          </div>
+          <p id="tool-hint" class="tool-hint">Select a markup to inspect or link its calculation.</p>
+          <div id="annotation-list" class="annotation-list">
+            <p class="list-empty">No markups on this page yet.</p>
+          </div>
+          <div id="annotation-editor" class="annotation-editor" hidden>
+            <div class="editor-title-row">
+              <span id="selected-markup-kind" class="kind-tag">Beam</span>
+              <button id="delete-annotation" class="text-button danger-text" type="button">Remove</button>
+            </div>
+            <label class="field-label" for="annotation-label">Element ID or note</label>
+            <input id="annotation-label" class="text-field" type="text" maxlength="80" placeholder="B-01">
+            <label class="field-label" for="linked-calculation">Linked calculation</label>
+            <select id="linked-calculation" class="text-field"><option value="">No linked calculation</option></select>
+          </div>
+        </section>
+
+        <section class="panel-section calculator-section">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Calculation library</p>
+              <h2>Run a calculation</h2>
+            </div>
+          </div>
+          <label class="field-label" for="calculation-picker">Calculation</label>
+          <select id="calculation-picker" class="text-field"><option value="">Loading calculations…</option></select>
+          <div id="calculation-description" class="calculation-description">Choose a registered module calculation.</div>
+          <div class="code-heading">
+            <label class="field-label" for="calculation-inputs">Inputs as JSON</label>
+            <button id="show-schema" class="text-button" type="button">Input schema</button>
+          </div>
+          <textarea id="calculation-inputs" class="code-field" spellcheck="false" rows="7" aria-label="Calculation input JSON">{}</textarea>
+          <div id="schema-panel" class="schema-panel" hidden><pre id="calculation-schema"></pre></div>
+          <button id="run-calculation" class="button button-primary run-button" type="button">Run calculation</button>
+          <div id="calculation-error" class="error-box" role="alert" hidden></div>
+          <div id="calculation-result" class="calculation-result" hidden>
+            <div class="result-heading">
+              <div><span class="result-status">Calculation saved</span><strong id="result-title"></strong></div>
+              <button id="link-result" class="text-button" type="button" disabled>Link to selected markup</button>
+            </div>
+            <p id="result-standard" class="result-standard"></p>
+            <div class="result-block">
+              <span>Result</span>
+              <pre id="result-output"></pre>
+            </div>
+          </div>
+          <div class="engineering-note">
+            <strong>Engineering scope</strong>
+            <p>Links associate a drawing mark with a saved OpenCalcs calculation run. They do not size or verify a beam, column, connection, or member capacity.</p>
+          </div>
+        </section>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>

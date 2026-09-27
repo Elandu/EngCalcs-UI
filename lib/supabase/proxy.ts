@@ -28,12 +28,39 @@ export async function updateSession(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
-  const protectedRoute = request.nextUrl.pathname.startsWith("/dashboard");
+  const protectedRoute =
+    request.nextUrl.pathname.startsWith("/dashboard") ||
+    request.nextUrl.pathname === "/drawing-review.html";
 
   if (!claims && protectedRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
+  }
+
+  if (request.nextUrl.pathname === "/drawing-review.html") {
+    const projectId = request.nextUrl.searchParams.get("projectId");
+    if (projectId) {
+      const { data: memberships, error: membershipError } = await supabase
+        .from("organisation_members")
+        .select("organisation_id");
+      const organisationIds = [...new Set((memberships ?? []).map((item) => item.organisation_id))];
+
+      if (membershipError || !organisationIds.length) {
+        return NextResponse.json({ error: "Drawing project not found." }, { status: 404 });
+      }
+
+      const { data: project, error: projectError } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("id", projectId)
+        .in("organisation_id", organisationIds)
+        .maybeSingle();
+
+      if (projectError || !project) {
+        return NextResponse.json({ error: "Drawing project not found." }, { status: 404 });
+      }
+    }
   }
 
   return response;
