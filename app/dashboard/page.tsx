@@ -63,6 +63,7 @@ export default async function DashboardPage() {
         <Brand />
         <div className="dashboard-header-actions">
           <Link href="/dashboard/settings/api-keys">API & MCP keys</Link>
+          <Link href="/dashboard/structural-fea">Structural FEA</Link>
           <span className="status-pill">Engineering workspace</span>
         </div>
       </header>
