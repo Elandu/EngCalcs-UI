@@ -165,18 +165,26 @@ export default function Home() {
             </p>
           </div>
           <div className="calculator-grid">
-            {calculatorGroups.map(([title, standard, description], index) => (
-              <article className={`calculator-card ${index === 0 ? "live" : "planned"}`} key={title}>
-                <div className="calculator-top">
-                  <span>{index === 0 ? "IN DEVELOPMENT" : "PLANNED"}</span>
-                  <b>0{index + 1}</b>
-                </div>
-                <h3>{title}</h3>
-                <small>{standard}</small>
-                <p>{description}</p>
-                <div className="card-arrow">↗</div>
-              </article>
-            ))}
+            {calculatorGroups.map(([title, standard, description], index) => {
+              const isWindPreview = index === 0;
+
+              return (
+                <article className={`calculator-card ${isWindPreview ? "live" : "planned"}`} key={title}>
+                  <div className="calculator-top">
+                    <span>{isWindPreview ? "AVAILABLE IN PREVIEW" : "PLANNED"}</span>
+                    <b>0{index + 1}</b>
+                  </div>
+                  <h3>{title}</h3>
+                  <small>{standard}</small>
+                  <p>{description}</p>
+                  {isWindPreview ? (
+                    <Link className="button button-light button-small" href="/dashboard/calculations">
+                      Open wind calculations <span aria-hidden="true">→</span>
+                    </Link>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
         </div>
       </section>
