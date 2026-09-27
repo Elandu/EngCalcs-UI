@@ -178,7 +178,7 @@ export default function Home() {
                   <small>{standard}</small>
                   <p>{description}</p>
                   {isWindPreview ? (
-                    <Link className="button button-light button-small" href="/dashboard/calculations">
+                    <Link className="button button-light button-small" href="/dashboard/calculations?q=wind">
                       Open wind calculations <span aria-hidden="true">→</span>
                     </Link>
                   ) : null}

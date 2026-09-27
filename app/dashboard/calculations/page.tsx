@@ -7,10 +7,21 @@ import { authPageHref } from "@/lib/safe-auth-redirect";
 
 export const dynamic = "force-dynamic";
 
-export default async function CalculationsPage() {
+export default async function CalculationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const query = Array.isArray(params.q) ? params.q[0] : params.q;
+  const initialQuery = query?.slice(0, 80) ?? "";
+
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
-  if (!claimsData?.claims?.sub) redirect(authPageHref("login", "/dashboard/calculations"));
+  const nextPath = initialQuery
+    ? `/dashboard/calculations?q=${encodeURIComponent(initialQuery)}`
+    : "/dashboard/calculations";
+  if (!claimsData?.claims?.sub) redirect(authPageHref("login", nextPath));
 
   const { data: memberships, error: membershipError } = await supabase
     .from("organisation_members")
@@ -46,6 +57,7 @@ export default async function CalculationsPage() {
           projects={projects ?? []}
           canCreateProject={canCreateProject}
           hasWorkspaceMembership={hasWorkspaceMembership}
+          initialQuery={initialQuery}
         />
       </section>
     </main>

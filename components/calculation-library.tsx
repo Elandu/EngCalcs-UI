@@ -26,14 +26,16 @@ export function CalculationLibrary({
   projects,
   canCreateProject,
   hasWorkspaceMembership,
+  initialQuery,
 }: {
   projects: Project[];
   canCreateProject: boolean;
   hasWorkspaceMembership: boolean;
+  initialQuery: string;
 }) {
   const router = useRouter();
   const [definitions, setDefinitions] = useState<Definition[]>([]);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState("all");
   const [projectId, setProjectId] = useState("");
   const [selectedId, setSelectedId] = useState("");
