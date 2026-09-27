@@ -10,17 +10,24 @@ export const dynamic = "force-dynamic";
 export default async function CalculationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[] }>;
+  searchParams: Promise<{
+    project?: string | string[];
+    q?: string | string[];
+  }>;
 }) {
   const params = await searchParams;
   const query = Array.isArray(params.q) ? params.q[0] : params.q;
   const initialQuery = query?.slice(0, 80) ?? "";
+  const projectParam = Array.isArray(params.project) ? params.project[0] : params.project;
+  const requestedProjectId = projectParam?.slice(0, 80) ?? "";
 
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
-  const nextPath = initialQuery
-    ? `/dashboard/calculations?q=${encodeURIComponent(initialQuery)}`
-    : "/dashboard/calculations";
+  const returnParams = new URLSearchParams();
+  if (initialQuery) returnParams.set("q", initialQuery);
+  if (requestedProjectId) returnParams.set("project", requestedProjectId);
+  const returnQuery = returnParams.toString();
+  const nextPath = returnQuery ? `/dashboard/calculations?${returnQuery}` : "/dashboard/calculations";
   if (!claimsData?.claims?.sub) redirect(authPageHref("login", nextPath));
 
   const { data: memberships, error: membershipError } = await supabase
@@ -45,6 +52,9 @@ export default async function CalculationsPage({
         .order("updated_at", { ascending: false })
     : { data: [], error: null };
   if (projectError) throw new Error(`Unable to load projects: ${projectError.message}`);
+  const initialProjectId = (projects ?? []).some((project) => project.id === requestedProjectId)
+    ? requestedProjectId
+    : "";
 
   return (
     <main className="dashboard-shell">
@@ -58,6 +68,7 @@ export default async function CalculationsPage({
           canCreateProject={canCreateProject}
           hasWorkspaceMembership={hasWorkspaceMembership}
           initialQuery={initialQuery}
+          initialProjectId={initialProjectId}
         />
       </section>
     </main>

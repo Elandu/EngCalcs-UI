@@ -196,6 +196,12 @@ export default async function ProjectsPage({
                   <div className="project-row-meta">
                     <span>{project.status}</span>
                     <Link href={`/dashboard/projects/${project.id}`}>Open →</Link>
+                    <Link
+                      className="button button-secondary button-small"
+                      href={`/dashboard/calculations?project=${encodeURIComponent(project.id)}`}
+                    >
+                      Add calculation
+                    </Link>
                   </div>
                 </article>
               ))}

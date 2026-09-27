@@ -27,17 +27,19 @@ export function CalculationLibrary({
   canCreateProject,
   hasWorkspaceMembership,
   initialQuery,
+  initialProjectId,
 }: {
   projects: Project[];
   canCreateProject: boolean;
   hasWorkspaceMembership: boolean;
   initialQuery: string;
+  initialProjectId: string;
 }) {
   const router = useRouter();
   const [definitions, setDefinitions] = useState<Definition[]>([]);
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState("all");
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(initialProjectId);
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
