@@ -10,9 +10,20 @@ import {
   PyniteInputs,
   PyniteMemberResult,
   PyniteResult,
+  PyniteStation,
   SAMPLE_FRAME_INPUTS,
   isPyniteInputs,
 } from "@/lib/pynite-model";
+import {
+  applyWindSource,
+  frameLinkIsValid,
+  frameWindLinkFromProvenance,
+  isFrameWindLink,
+  linkedInputRequest,
+  missingCombinationFactors,
+  windAxisReferences,
+  type FrameWindLink,
+} from "@/lib/frame-wind-links";
 
 type SavedRun = {
   id: string;
@@ -21,18 +32,25 @@ type SavedRun = {
   title: string;
   input: unknown;
   result: unknown;
+  provenance: unknown;
+  stale: boolean;
+  staleReasons: string[];
+  superseded?: boolean;
   createdAt: string;
 };
+
+type SavedWindRun = Omit<SavedRun, "input">;
 
 type Props = {
   projectId: string;
   projectName: string;
   canRun: boolean;
   savedRuns: SavedRun[];
+  windRuns: SavedWindRun[];
 };
 
 type ViewTab = "model" | "loads" | "results";
-type ResultKind = "moment_z_knm" | "shear_y_kn" | "axial_kn" | "deflection_y_m";
+type ResultKind = keyof Pick<PyniteStation, "moment_y_knm" | "moment_z_knm" | "shear_y_kn" | "shear_z_kn" | "axial_kn" | "deflection_y_m" | "deflection_z_m">;
 
 function resultFromUnknown(value: unknown): PyniteResult | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -180,7 +198,7 @@ function FrameCanvas({
         className={styles.canvas}
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="Interactive 3D structural frame model"
+        aria-label="Interactive 3D frame model with schematic load labels; load glyphs do not show vector direction or scale"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -191,9 +209,6 @@ function FrameCanvas({
           <pattern id="fea-grid" width="28" height="28" patternUnits="userSpaceOnUse">
             <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#1b332f" strokeWidth="1" />
           </pattern>
-          <marker id="fea-load-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-            <path d="M0,0 L8,4 L0,8 z" fill="#f3a27a" />
-          </marker>
         </defs>
         <rect width={width} height={height} fill="url(#fea-grid)" />
         <path d="M36 36 H864 V554 H36 Z" fill="none" stroke="#203a35" strokeWidth="1" />
@@ -224,20 +239,14 @@ function FrameCanvas({
               />
               <text x={midpoint.x + 8} y={midpoint.y - 9} className={styles.memberLabel}>{member.id}</text>
               {memberLoads.map((load, index) => {
-                const directionY = load.start_kn_m < 0 ? 45 : -45;
+                const markerX = midpoint.x + index * 14;
+                const markerY = midpoint.y - 14 - index * 11;
+                const span = `${load.start_m ?? 0}–${load.end_m ?? "full"} m`;
                 return (
                   <g key={`${member.id}-${load.load_case}-${index}`}>
-                    <line
-                      x1={midpoint.x + index * 12}
-                      y1={midpoint.y - directionY}
-                      x2={midpoint.x + index * 12}
-                      y2={midpoint.y - 7}
-                      stroke="#f3a27a"
-                      strokeWidth="1.5"
-                      markerEnd="url(#fea-load-arrow)"
-                    />
-                    <text x={midpoint.x + 7} y={midpoint.y - directionY - 5} className={styles.loadLabel}>
-                      {load.start_kn_m} kN/m
+                    <circle cx={markerX} cy={markerY} r="3" fill="#e6bd8b" />
+                    <text x={markerX + 7} y={markerY + 3} className={styles.loadLabel}>
+                      {load.load_case} · {load.direction} · {load.start_kn_m}→{load.end_kn_m} kN/m · {span}
                     </text>
                   </g>
                 );
@@ -283,32 +292,41 @@ function FrameCanvas({
   );
 }
 
-function MemberDiagram({ member, kind }: { member: PyniteMemberResult | null; kind: ResultKind }) {
-  if (!member?.stations.length) {
-    return <div className={styles.emptyPlot}>Run analysis to see member diagrams.</div>;
+function MemberDiagram({ member, kind, label, unit, valueScale = 1 }: { member: PyniteMemberResult | null; kind: ResultKind; label: string; unit: string; valueScale?: number }) {
+  const stations = member?.stations.filter((station) => Number.isFinite(station.x_m) && Number.isFinite(station[kind])) ?? [];
+  if (!member || !stations.length) {
+    return <div className={styles.emptyPlot}>No finite {label} station results for this member and combination.</div>;
   }
-  const values = member.stations.map((station) => station[kind]);
-  const maximum = Math.max(...values.map(Math.abs), 1e-9);
-  const points = values.map((value, index) => {
-    const x = 22 + (index / Math.max(1, values.length - 1)) * 356;
-    const y = 62 - (value / maximum) * 42;
+  const values = stations.map((station) => station[kind] * valueScale);
+  const maxAbs = Math.max(...values.map(Math.abs));
+  const scale = maxAbs || 1;
+  const zeroY = 86;
+  const startX = Math.min(...stations.map((station) => station.x_m));
+  const endX = Math.max(...stations.map((station) => station.x_m));
+  const stationSpan = endX - startX;
+  const points = stations.map((station, index) => {
+    const x = 42 + (stationSpan ? (station.x_m - startX) / stationSpan : index / Math.max(1, stations.length - 1)) * 716;
+    const y = zeroY - (station[kind] * valueScale / scale) * 48;
     return `${x},${y}`;
   }).join(" ");
+  const min = Math.min(...values);
+  const max = Math.max(...values);
   return (
-    <svg className={styles.diagram} viewBox="0 0 400 88" role="img" aria-label={`${kind.replaceAll("_", " ")} member diagram`}>
-      <line x1="20" y1="62" x2="380" y2="62" className={styles.diagramBaseline} />
+    <svg className={styles.diagram} viewBox="0 0 800 150" role="img" aria-label={`${label} for member ${member.member_id}, ${fmt(min)} to ${fmt(max)} ${unit}`}>
+      <text x="42" y="14">{label} · {unit}</text>
+      <line x1="42" y1={zeroY} x2="758" y2={zeroY} className={styles.diagramBaseline} />
       <polyline points={points} className={styles.diagramLine} />
-      <text x="20" y="82">0 m</text><text x="380" y="82" textAnchor="end">{fmt(member.length_m)} m</text>
-      <text x="20" y="13">{fmt(Math.max(...values))}</text>
-      <text x="380" y="13" textAnchor="end">{fmt(Math.min(...values))}</text>
+      <text x="42" y="30">sampled max {fmt(max)}</text><text x="758" y="30" textAnchor="end">sampled min {fmt(min)}</text>
+      <text x="42" y="140">{fmt(startX)} m</text><text x="758" y="140" textAnchor="end">{fmt(endX)} m</text>
     </svg>
   );
 }
 
-export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: Props) {
+export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, windRuns }: Props) {
   const [title, setTitle] = useState("Simply supported beam");
   const [inputs, setInputs] = useState<PyniteInputs>(SAMPLE_FRAME_INPUTS);
   const [result, setResult] = useState<PyniteResult | null>(null);
+  const analysisRevision = useRef(0);
   const [tab, setTab] = useState<ViewTab>("model");
   const [selectedNode, setSelectedNode] = useState("N1");
   const [selectedMember, setSelectedMember] = useState("M1");
@@ -316,7 +334,6 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
   const [endNode, setEndNode] = useState("N2");
   const [selectedLoadCase, setSelectedLoadCase] = useState("D");
   const [activeCombo, setActiveCombo] = useState("Service");
-  const [resultKind, setResultKind] = useState<ResultKind>("moment_z_knm");
   const [analysisType, setAnalysisType] = useState<PyniteInputs["analysis_type"]>("linear");
   const [distributedDirection, setDistributedDirection] = useState<FrameDistributedLoad["direction"]>("FY");
   const [nodeLoadDirection, setNodeLoadDirection] = useState<"FX" | "FY" | "FZ" | "MX" | "MY" | "MZ">("FY");
@@ -330,6 +347,10 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
   const [busy, setBusy] = useState(false);
   const [showLoads, setShowLoads] = useState(true);
   const [history, setHistory] = useState(savedRuns);
+  const [windSourceLink, setWindSourceLink] = useState<FrameWindLink | null>(null);
+  const [windRunSelection, setWindRunSelection] = useState("");
+  const [axisReviewConfirmed, setAxisReviewConfirmed] = useState(false);
+  const [activeSavedRun, setActiveSavedRun] = useState<{ id: string; calculationId: string; runSequence: number; stale: boolean; staleReasons: string[]; superseded?: boolean } | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const model = inputs.model;
@@ -359,7 +380,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
   }, []);
 
   const resultMetrics = useMemo(() => ({
-    displacementMm: extrema(activeNodeResults, "dy_m") * 1000,
+    displacementMm: extrema(activeMemberResult?.stations ?? [], "deflection_y_m") * 1000,
     reactionKn: Math.max(...activeNodeResults.map((row) => Math.hypot(row.reaction_fx_kn, row.reaction_fy_kn, row.reaction_fz_kn)), 0),
     momentKnm: extrema(activeMemberResult?.stations ?? [], "moment_z_knm"),
   }), [activeMemberResult, activeNodeResults]);
@@ -370,12 +391,27 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
       try {
         const raw = window.localStorage.getItem(`opencalcs:pynite:${projectId}`);
         if (raw) {
-          const draft = JSON.parse(raw) as { title?: unknown; inputs?: unknown };
+          const draft = JSON.parse(raw) as { title?: unknown; inputs?: unknown; windSourceLink?: unknown; activeSavedRun?: unknown };
           if (typeof draft.title === "string" && isPyniteInputs(draft.inputs)) {
             const restoredInputs = normalizePyniteInputs(draft.inputs);
             setTitle(draft.title);
             setInputs(restoredInputs);
             setAnalysisType(restoredInputs.analysis_type);
+            const restoredLink = isFrameWindLink(draft.windSourceLink)
+              ? draft.windSourceLink
+              : null;
+            setWindSourceLink(restoredLink);
+            const savedDraftRun = draft.activeSavedRun && typeof draft.activeSavedRun === "object"
+              ? draft.activeSavedRun as Record<string, unknown>
+              : null;
+            const restoredRun = savedDraftRun && typeof savedDraftRun.id === "string" &&
+                typeof savedDraftRun.calculationId === "string" && Number.isSafeInteger(savedDraftRun.runSequence) &&
+                typeof savedDraftRun.stale === "boolean" && Array.isArray(savedDraftRun.staleReasons) &&
+                savedDraftRun.staleReasons.every((reason) => typeof reason === "string") &&
+                (savedDraftRun.superseded === undefined || typeof savedDraftRun.superseded === "boolean")
+              ? savedDraftRun as NonNullable<typeof activeSavedRun>
+              : null;
+            setActiveSavedRun(restoredRun);
             focusModel(restoredInputs);
           }
         }
@@ -396,17 +432,80 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
     try {
       window.localStorage.setItem(
         `opencalcs:pynite:${projectId}`,
-        JSON.stringify({ title, inputs: { ...inputs, analysis_type: analysisType } }),
+        JSON.stringify({ title, inputs: { ...inputs, analysis_type: analysisType }, windSourceLink, activeSavedRun }),
       );
     } catch {
       window.setTimeout(() => {
         setMessage("The browser could not save the local draft. Export a model file to keep this work.");
       }, 0);
     }
-  }, [analysisType, hydrated, inputs, projectId, title]);
+  }, [activeSavedRun, analysisType, hydrated, inputs, projectId, title, windSourceLink]);
+
+  const exactWindSource = windSourceLink
+    ? windRuns.find((run) => run.id === windSourceLink.sourceRunId && run.calculationId === windSourceLink.sourceCalculationId)
+    : undefined;
+  const selectedWindSource = windRuns.find((run) => run.id === windRunSelection);
+  const selectedWindAxes = selectedWindSource ? windAxisReferences(selectedWindSource.result) : [];
+  const windLinkErrors = windSourceLink ? frameLinkIsValid(windSourceLink, { ...inputs, analysis_type: analysisType }, exactWindSource) : [];
+  if (windSourceLink && exactWindSource?.stale) {
+    windLinkErrors.push("The selected wind run has stale upstream inputs. Recalculate the wind frame-load calculation and deliberately apply its new run.");
+  }
+  if (activeSavedRun?.superseded) {
+    windLinkErrors.push("This saved frame run has a newer revision. Open the latest saved run before creating another revision.");
+  } else if (windSourceLink && activeSavedRun?.stale) {
+    windLinkErrors.push("This saved frame revision uses an older source run. Apply a fresh wind run or explicitly unlink to keep a manual snapshot.");
+  }
+  const unassignedWindCases = windSourceLink ? missingCombinationFactors({ ...inputs, analysis_type: analysisType }) : [];
+  const frameRunBlocked = windLinkErrors.length > 0 || unassignedWindCases.length > 0 || Boolean(activeSavedRun?.stale && windSourceLink);
+
+  function applySelectedWindRun(runId: string) {
+    const source = windRuns.find((run) => run.id === runId);
+    if (!source) return;
+    if (!axisReviewConfirmed) {
+      setMessage("Review the source axis references and confirm before applying these member loads.");
+      return;
+    }
+    if (source.stale) {
+      setMessage("This wind run has stale upstream inputs. Recalculate wind and select its new saved run.");
+      return;
+    }
+    try {
+      const applied = applyWindSource({ ...inputs, analysis_type: analysisType }, source);
+      analysisRevision.current += 1;
+      setInputs(applied.inputs);
+      setWindSourceLink(applied.link);
+      setActiveSavedRun((current) => current ? { ...current, stale: false, staleReasons: [] } : current);
+      setWindRunSelection(source.id);
+      setAxisReviewConfirmed(false);
+      setResult(null);
+      focusModel(applied.inputs);
+      setMessage(`Replaced the distributed-load list with wind run ${source.runSequence}. New wind load cases were added with zero combination factors; review and assign combination factors before solving.`);
+      setTab("loads");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to apply this wind run.");
+    }
+  }
+
+  function unlinkWindLoads() {
+    if (!windSourceLink) return;
+    analysisRevision.current += 1;
+    setWindSourceLink(null);
+    setActiveSavedRun((current) => current ? { ...current, stale: false, staleReasons: [] } : current);
+    setAxisReviewConfirmed(false);
+    setMessage("Wind provenance detached. The displayed distributed loads remain as a manual snapshot.");
+  }
 
   function updateModel(update: (current: FrameModel) => FrameModel) {
-    setInputs((current) => ({ ...current, model: update(current.model) }));
+    analysisRevision.current += 1;
+    setAxisReviewConfirmed(false);
+    setInputs((current) => {
+      const nextModel = update(current.model);
+      if (windSourceLink && JSON.stringify(nextModel.member_distributed_loads) !== JSON.stringify(current.model.member_distributed_loads)) {
+        setMessage("These distributed loads are linked to a saved wind run. Unlink the wind source before editing or removing them.");
+        return current;
+      }
+      return { ...current, model: nextModel };
+    });
     setResult(null);
   }
 
@@ -537,6 +636,10 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
   }
 
   function addDistributedLoad() {
+    if (windSourceLink) {
+      setMessage("Unlink the wind source before adding a manual distributed load.");
+      return;
+    }
     if (!selectedMemberRow) {
       setMessage("Add a member before assigning a distributed load.");
       return;
@@ -655,6 +758,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
   }
 
   function setAnalysis(value: PyniteInputs["analysis_type"]) {
+    analysisRevision.current += 1;
     setAnalysisType(value);
     setInputs((current) => ({ ...current, analysis_type: value }));
     setResult(null);
@@ -669,8 +773,15 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
       setMessage("Give this model a name before running analysis.");
       return;
     }
+    if (frameRunBlocked) {
+      setMessage(windLinkErrors[0] ?? `Assign a reviewed nonzero combination factor for wind case${unassignedWindCases.length === 1 ? "" : "s"}: ${unassignedWindCases.join(", ")}.`);
+      setTab("loads");
+      return;
+    }
     setBusy(true);
     setMessage("");
+    const revisionAtStart = analysisRevision.current;
+    const runTitle = title.trim();
     const runInputs = { ...inputs, analysis_type: analysisType };
     try {
       const response = await fetch(
@@ -678,27 +789,46 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId, title: title.trim(), inputs: runInputs }),
+          body: JSON.stringify({
+            projectId,
+            title: runTitle,
+            inputs: runInputs,
+            ...(windSourceLink ? { linkedInputs: [linkedInputRequest(windSourceLink)] } : {}),
+            ...(activeSavedRun ? { revisionCalculationId: activeSavedRun.calculationId, expectedRunId: activeSavedRun.id } : {}),
+          }),
         },
       );
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "PyNite analysis failed.");
       const nextResult = resultFromUnknown(payload.result);
       if (!nextResult) throw new Error("The solver returned an unrecognised result shape.");
-      setResult(nextResult);
-      setActiveCombo(nextResult.load_combinations[0] ?? "");
+      const savedRunId = typeof payload.runId === "string" ? payload.runId : null;
+      const savedCalculationId = typeof payload.calculationId === "string" ? payload.calculationId : null;
+      if (!savedRunId || !savedCalculationId) throw new Error("The solver response did not include saved run identifiers, so this run cannot be revised safely.");
+      const savedRunSequence = typeof payload.runSequence === "number" ? payload.runSequence : (activeSavedRun?.runSequence ?? 0) + 1;
+      const appliedLinks = Array.isArray(payload.appliedLinks) ? payload.appliedLinks : [];
       setHistory((current) => [
         {
-          id: payload.runId,
-          calculationId: payload.calculationId,
-          runSequence: 1,
-          title: title.trim(),
+          id: savedRunId,
+          calculationId: savedCalculationId,
+          title: runTitle,
           input: runInputs,
           result: nextResult,
+          provenance: { linked_inputs: appliedLinks },
+          stale: false,
+          staleReasons: [],
           createdAt: payload.createdAt ?? new Date().toISOString(),
+          runSequence: savedRunSequence,
         },
         ...current,
       ].slice(0, 50));
+      if (revisionAtStart !== analysisRevision.current) {
+        setMessage("The earlier model was saved in run history. Your model changed during analysis, so its results have not been applied to the current view. Run the updated model again.");
+        return;
+      }
+      setActiveSavedRun({ id: savedRunId, calculationId: savedCalculationId, runSequence: savedRunSequence, stale: false, staleReasons: [] });
+      setResult(nextResult);
+      setActiveCombo(nextResult.load_combinations[0] ?? "");
       setMessage("PyNite analysis completed and the run was saved to this project.");
       setTab("results");
     } catch (error) {
@@ -716,12 +846,25 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
       return;
     }
     const savedInputs = normalizePyniteInputs(run.input);
+    let restoredWindLink: FrameWindLink | null;
+    try {
+      restoredWindLink = frameWindLinkFromProvenance(run.provenance, savedInputs);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Saved frame provenance cannot be revised safely.");
+      return;
+    }
+    analysisRevision.current += 1;
     setTitle(run.title);
     setInputs(savedInputs);
     setAnalysisType(savedInputs.analysis_type);
+    setActiveSavedRun({ id: run.id, calculationId: run.calculationId, runSequence: run.runSequence, stale: run.stale, staleReasons: run.staleReasons, superseded: run.superseded });
+    setWindSourceLink(restoredWindLink);
+    setWindRunSelection(restoredWindLink?.sourceRunId ?? "");
+    setAxisReviewConfirmed(false);
     const savedResult = resultFromUnknown(run.result);
     setResult(savedResult);
     focusModel(savedInputs, savedResult?.load_combinations[0]);
+    setTab("results");
     setMessage(`Loaded saved project run ${run.runSequence}.`);
   }
 
@@ -747,7 +890,10 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
       if (!isPyniteInputs(importedInputs)) {
         throw new Error("The file does not contain a supported OpenCalcs PyNite frame model.");
       }
+      analysisRevision.current += 1;
       const normalizedInputs = normalizePyniteInputs(importedInputs);
+      setActiveSavedRun(null);
+      setWindSourceLink(null);
       setInputs(normalizedInputs);
       setAnalysisType(normalizedInputs.analysis_type);
       if (typeof parsed.title === "string") setTitle(parsed.title);
@@ -762,24 +908,30 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
   }
 
   function loadSample() {
+    analysisRevision.current += 1;
     const sample = structuredClone(SAMPLE_FRAME_INPUTS);
     setInputs(sample);
     setTitle("Simply supported beam");
     setAnalysisType("linear");
+    setActiveSavedRun(null);
+    setWindSourceLink(null);
     focusModel(sample, "Service");
     setResult(null);
     setMessage("Loaded the six-metre demo beam. This example uses illustrative section properties.");
   }
 
-  const chartChoices: Array<{ value: ResultKind; label: string }> = [
-    { value: "moment_z_knm", label: "Major moment · Mz (kN·m)" },
-    { value: "shear_y_kn", label: "Major shear · Vy (kN)" },
-    { value: "axial_kn", label: "Axial force (kN)" },
-    { value: "deflection_y_m", label: "Local deflection · dy (m)" },
+  const diagramChoices: Array<{ value: ResultKind; label: string; unit: string }> = [
+    { value: "moment_z_knm", label: "BMD · Mz local axis", unit: "kN·m" },
+    { value: "moment_y_knm", label: "BMD · My local axis", unit: "kN·m" },
+    { value: "shear_y_kn", label: "SFD · Vy local axis", unit: "kN" },
+    { value: "shear_z_kn", label: "SFD · Vz local axis", unit: "kN" },
+    { value: "axial_kn", label: "Axial force N", unit: "kN" },
+    { value: "deflection_y_m", label: "Deflection dy · local axis", unit: "mm" },
+    { value: "deflection_z_m", label: "Deflection dz · local axis", unit: "mm" },
   ];
 
   return (
-    <section className={styles.workspace} aria-label="PyNite structural analysis workspace">
+    <section className={styles.workspace} aria-label="Frame analysis workspace">
       <header className={styles.topbar}>
         <div className={styles.projectIdentity}>
           <span className={styles.brandMark}>OC</span>
@@ -794,7 +946,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
             <option value="">Open saved run · {history.length}</option>
             {history.map((run) => (
               <option key={run.id} value={run.id}>
-                {run.title} · {new Date(run.createdAt).toLocaleDateString()}
+                    {run.title} · run {run.runSequence} · {new Date(run.createdAt).toLocaleDateString()}{run.superseded ? " · superseded" : ""}
               </option>
             ))}
           </select>
@@ -934,6 +1086,32 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
           {tab === "loads" ? (
             <div className={styles.panelScroll}>
               <section className={styles.toolSection}>
+                <div className={styles.sectionTitle}><h3>Wind pressure to frame loads</h3></div>
+                <p className={styles.helpText}>Choose an exact saved AS/NZS 1170.2 frame-load run. Applying it replaces the full distributed-load list and keeps its run ID linked for revisions.</p>
+                <label className={styles.field}>Saved wind run<select aria-label="Select saved wind frame-load run" value={windRunSelection} onChange={(event) => { setWindRunSelection(event.target.value); setAxisReviewConfirmed(false); }}>
+                  <option value="">Select an exact saved run…</option>
+                  {windRuns.map((run) => <option key={run.id} value={run.id}>
+                    {run.title} · run {run.runSequence} · {new Date(run.createdAt).toLocaleDateString()}{run.stale ? " · stale" : ""}
+                  </option>)}
+                </select></label>
+                {selectedWindSource ? <>
+                  <p className={styles.helpText}>Reviewed source axis references: {selectedWindAxes.length ? selectedWindAxes.join("; ") : "missing; this source cannot be applied"}. Verify each reference against member local axes, end-node orientation, and member rotation.</p>
+                  <label className={styles.helpText}><input type="checkbox" checked={axisReviewConfirmed} onChange={(event) => setAxisReviewConfirmed(event.target.checked)} /> I reviewed these load directions and member axes against the frame model.</label>
+                <button type="button" className={styles.secondaryButton} disabled={!axisReviewConfirmed || selectedWindSource.stale} onClick={() => applySelectedWindRun(selectedWindSource.id)}>Apply selected exact run</button>
+                </> : null}
+                {windSourceLink ? <>
+                  <p className={windLinkErrors.length ? styles.helpText : styles.resultContext}>
+                    {exactWindSource?.title ?? "Saved wind run"} · run {windSourceLink.sourceRunSequence || "?"} · {windSourceLink.sourceRunId.slice(0, 8)}
+                    {exactWindSource?.stale ? " · upstream is stale" : " · exact source run retained"}
+                  </p>
+                  {windLinkErrors.map((error) => <p className={styles.helpText} key={error}>{error}</p>)}
+                  {unassignedWindCases.length ? <p className={styles.helpText}>Review nonzero combination factors for: {unassignedWindCases.join(", ")}.</p> : null}
+                  <button type="button" className={styles.secondaryButton} onClick={unlinkWindLoads}>Unlink and keep this load snapshot</button>
+                </> : <p className={styles.helpText}>No wind source is linked. Manual distributed loads can be edited.</p>}
+                {windRuns.length === 0 ? <p className={styles.helpText}>No saved AS/NZS 1170.2 member-load runs are available in this project.</p> : null}
+              </section>
+              {activeSavedRun?.stale ? <section className={styles.warningBox}><strong>This frame run is stale</strong><p>{activeSavedRun.staleReasons.join("; ") || "A linked source has a newer saved run."} Saving creates a new revision only after the selected source is reviewed.</p></section> : null}
+              <section className={styles.toolSection}>
                 <div className={styles.sectionTitle}><h3>Load cases</h3><button type="button" className={styles.textButton} onClick={addLoadCase}>＋ Add</button></div>
                 {model.load_cases.map((loadCase) => (
                   <button
@@ -955,12 +1133,12 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
                   <label>Start · kN/m<input type="number" step="any" value={lineStart} onChange={(event) => setLineStart(event.target.value)} /></label>
                   <label>End · kN/m<input type="number" step="any" value={lineEnd} onChange={(event) => setLineEnd(event.target.value)} /></label>
                 </div>
-                <button type="button" className={styles.secondaryButton} onClick={addDistributedLoad} disabled={!model.members.length}>＋ Apply to selected member</button>
+                <button type="button" className={styles.secondaryButton} onClick={addDistributedLoad} disabled={!model.members.length || Boolean(windSourceLink)}>＋ Apply to selected member</button>
                 {model.member_distributed_loads.map((load, index) => (
                   <div className={styles.loadRecord} key={`${load.member_id}-${load.load_case}-${index}`}>
                     <strong>{load.member_id} · {load.load_case}</strong>
                     <span>{load.direction} · {fmt(load.start_kn_m)} to {fmt(load.end_kn_m)} kN/m</span>
-                    <button type="button" aria-label={`Remove distributed load ${index + 1}`} onClick={() => updateModel((current) => ({ ...current, member_distributed_loads: current.member_distributed_loads.filter((_, loadIndex) => loadIndex !== index) }))}>×</button>
+                    <button type="button" aria-label={`Remove distributed load ${index + 1}`} disabled={Boolean(windSourceLink)} onClick={() => updateModel((current) => ({ ...current, member_distributed_loads: current.member_distributed_loads.filter((_, loadIndex) => loadIndex !== index) }))}>×</button>
                   </div>
                 ))}
               </section>
@@ -1002,24 +1180,21 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
               <section className={styles.toolSection}>
                 <div className={styles.sectionTitle}><h3>Analysis method</h3></div>
                 <label className={styles.field}>Solver<select value={analysisType} onChange={(event) => setAnalysis(event.target.value as PyniteInputs["analysis_type"])}><option value="linear">Linear elastic</option><option value="p_delta">P-Delta · second order</option></select></label>
-                <button type="button" className={styles.runButtonWide} disabled={!canRun || busy} onClick={runAnalysis}>{busy ? "Solving model…" : "Run and save analysis"}</button>
+                <button type="button" className={styles.runButtonWide} disabled={!canRun || busy || frameRunBlocked} onClick={runAnalysis}>{busy ? "Solving model…" : activeSavedRun ? "Save new frame revision" : "Run and save analysis"}</button>
+                {frameRunBlocked ? <p className={styles.helpText}>{windLinkErrors[0] ?? `Review a nonzero factor for wind load cases: ${unassignedWindCases.join(", ")}.`}</p> : null}
                 {!canRun ? <p className={styles.helpText}>Your project role can view the model, but only owners, admins, and engineers can run analysis.</p> : null}
               </section>
               {result ? (
                 <>
                   <section className={styles.toolSection}>
-                    <div className={styles.sectionTitle}><h3>Result set</h3><span className={styles.solvedPill}>SOLVED</span></div>
+                    <div className={styles.sectionTitle}><h3>Result set</h3><span className={styles.solvedPill}>SOLVED · {result.solver.name}</span></div>
+                    <p className={styles.resultContext}>{title} · {selectedMemberRow?.id ?? "No member selected"} · {activeCombo}</p>
                     <label className={styles.field}>Combination<select value={activeCombo} onChange={(event) => setActiveCombo(event.target.value)}>{result.load_combinations.map((combo) => <option key={combo}>{combo}</option>)}</select></label>
                     <div className={styles.resultMetricGrid}>
-                      <div><span>Max |dy|</span><strong>{fmt(resultMetrics.displacementMm)} <small>mm</small></strong></div>
+                      <div><span>Max sampled |dy| · selected member</span><strong>{fmt(resultMetrics.displacementMm)} <small>mm</small></strong></div>
                       <div><span>Max reaction</span><strong>{fmt(resultMetrics.reactionKn)} <small>kN</small></strong></div>
-                      <div><span>Max |Mz| · selected member</span><strong>{fmt(resultMetrics.momentKnm)} <small>kN·m</small></strong></div>
+                      <div><span>Max sampled |Mz| · selected member</span><strong>{fmt(resultMetrics.momentKnm)} <small>kN·m</small></strong></div>
                     </div>
-                  </section>
-                  <section className={styles.toolSection}>
-                    <div className={styles.sectionTitle}><h3>Selected member · {selectedMemberRow?.id ?? "—"}</h3></div>
-                    <label className={styles.field}>Diagram<select value={resultKind} onChange={(event) => setResultKind(event.target.value as ResultKind)}>{chartChoices.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select></label>
-                    <MemberDiagram member={activeMemberResult} kind={resultKind} />
                   </section>
                   <section className={styles.toolSection}>
                     <div className={styles.sectionTitle}><h3>Node response</h3></div>
@@ -1053,13 +1228,29 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
 
         <section className={styles.viewportPanel} aria-label="Structural model view">
           <div className={styles.viewportHeader}>
-            <div><span className={styles.eyebrow}>3D model</span><strong>{title || "Untitled model"}</strong></div>
+            <div><span className={styles.eyebrow}>{tab === "results" ? "Analysis results" : "3D model"}</span><strong>{title || "Untitled model"}</strong></div>
             <div className={styles.viewportActions}>
-              <label className={styles.toggle}><input type="checkbox" checked={showLoads} onChange={(event) => setShowLoads(event.target.checked)} /><span>Loads</span></label>
+              {tab === "results" ? <button type="button" className={styles.modelViewButton} onClick={() => setTab("model")}>View model</button> : <label className={styles.toggle}><input type="checkbox" checked={showLoads} onChange={(event) => setShowLoads(event.target.checked)} /><span>Loads</span></label>}
               <span className={styles.unitsBadge}>kN · m</span>
             </div>
           </div>
-          <FrameCanvas
+          {tab === "results" ? (
+            <div className={styles.resultsCanvas}>
+              {result ? <>
+                <div className={styles.resultsControls}>
+                  <label>Member<select aria-label="Result member" value={selectedMemberRow?.id ?? ""} onChange={(event) => setSelectedMember(event.target.value)}>{model.members.map((member) => <option key={member.id} value={member.id}>{member.id}</option>)}</select></label>
+                  <label>Load combination<select aria-label="Result load combination" value={activeCombo} onChange={(event) => setActiveCombo(event.target.value)}>{result.load_combinations.map((combo) => <option key={combo}>{combo}</option>)}</select></label>
+                  <span>{activeMemberResult?.member_id ?? "No result for selection"} · {activeCombo}</span>
+                </div>
+                <div className={styles.diagramGrid}>
+                  <p className={styles.resultSamplingNote}>Plots show local member axes with positive values upward. Curves and extrema use {activeMemberResult?.stations.length ?? 0} equally spaced solver stations; extrema between stations may be higher.</p>
+                  {diagramChoices.map((choice) => <article className={styles.diagramCard} key={choice.value}>
+                    <MemberDiagram member={activeMemberResult} kind={choice.value} label={choice.label} unit={choice.unit} valueScale={choice.value.endsWith("_m") ? 1000 : 1} />
+                  </article>)}
+                </div>
+              </> : <div className={styles.emptyPanel}><strong>No current result set</strong><p>Run analysis to see member diagrams. Editing the model clears the previous result set.</p></div>}
+            </div>
+          ) : <FrameCanvas
             model={model}
             selectedNode={selectedNodeRow?.id ?? ""}
             selectedMember={selectedMemberRow?.id ?? ""}
@@ -1068,7 +1259,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns }: P
             showLoads={showLoads}
             onSelectNode={setSelectedNode}
             onSelectMember={(id) => { setSelectedMember(id); setTab("model"); }}
-          />
+          />}
           <div className={styles.bottomStatus}>
             <span><i className={styles.statusDot} />{result ? `${result.solver.name} ${result.solver.version}` : "PyNite solver ready"}</span>
             <span>{analysisType === "p_delta" ? "P-Delta analysis" : "Linear elastic analysis"}</span>

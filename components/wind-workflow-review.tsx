@@ -309,6 +309,7 @@ export function WindWorkflowReview({
 
   const canEngineer = ["owner", "admin", "engineer"].includes(role);
   const canReview = ["owner", "admin", "reviewer"].includes(role);
+  const isIssued = stages.some((stage) => stage.state === "issued");
   const allApproved = stages.every(
     (stage) => stage.latestReview?.status === "approved",
   );
@@ -321,6 +322,10 @@ export function WindWorkflowReview({
 
   const latestIssueRunIds = useMemo(
     () => stages.map((stage) => stage.latestRun.id).sort(),
+    [stages],
+  );
+  const expectedRunIds = useMemo(
+    () => Object.fromEntries(stages.map((stage) => [stage.calculationId, stage.latestRun.id])),
     [stages],
   );
 
@@ -337,7 +342,17 @@ export function WindWorkflowReview({
       const { data, error } = await supabase.functions.invoke(functionName, { body });
 
       if (error || data?.error) {
-        setMessage(error?.message || data?.error || "Action failed.");
+        let serverMessage = typeof data?.error === "string" ? data.error : "";
+        const context = error && "context" in error ? error.context : null;
+        if (!serverMessage && context instanceof Response) {
+          const responseBody = await context.clone().json().catch(() => null);
+          if (typeof responseBody?.error === "string") serverMessage = responseBody.error;
+          if (!serverMessage && context.status === 404) {
+            serverMessage = "Wind workflow support is not deployed yet.";
+          }
+          if (!serverMessage) serverMessage = `Request failed (${context.status}).`;
+        }
+        setMessage(serverMessage || error?.message || "Action failed.");
         return null;
       }
 
@@ -359,6 +374,7 @@ export function WindWorkflowReview({
         projectId,
         workflowInstanceId,
         action,
+        expectedRunIds,
         note: reviewNote.trim() || null,
       },
       action === "submit"
@@ -411,9 +427,10 @@ export function WindWorkflowReview({
         projectId,
         workflowInstanceId,
         inputs: baseInputs,
+        expectedRunIds,
         overrides: [override],
       },
-      "Override applied and affected downstream stages rerun.",
+      "Override applied and all six stages recomputed.",
     );
 
     if (data) {
@@ -427,7 +444,7 @@ export function WindWorkflowReview({
   async function issue() {
     const data = await invoke(
       "opencalcs-issue-wind-workflow",
-      { projectId, workflowInstanceId },
+      { projectId, workflowInstanceId, expectedRunIds },
       "Issued calculation pack created.",
     );
     if (data?.downloadUrl) {
@@ -453,13 +470,13 @@ export function WindWorkflowReview({
           <p className="eyebrow">Current Wind workflow</p>
           <h2>Review, revise and issue</h2>
           <p>
-            Each stage retains immutable run history. Overrides create new downstream runs
-            without rewriting previously reviewed engineering records.
+            Each run recomputes all six stages together. Overrides and prior runs remain in an
+            auditable ledger, and saved run history is never rewritten.
           </p>
         </div>
         <div className="workflow-review-status">
-          <span className={allApproved ? "review-chip approved" : "review-chip"}>
-            {allApproved ? "Ready to issue" : anyPending ? "Under review" : "Draft"}
+          <span className={isIssued ? "review-chip approved" : allApproved ? "review-chip approved" : "review-chip"}>
+            {isIssued ? "Issued" : allApproved ? "Ready to issue" : anyPending ? "Under review" : "Draft"}
           </span>
           <code>{workflowInstanceId.slice(0, 8)}</code>
         </div>
@@ -546,7 +563,7 @@ export function WindWorkflowReview({
             ) : null}
 
             <div className="stage-actions">
-              {canEngineer && (stageVariables[stage.stageKey]?.length ?? 0) > 0 ? (
+              {canEngineer && !isIssued && (stageVariables[stage.stageKey]?.length ?? 0) > 0 ? (
                 <button
                   className="button button-secondary button-small"
                   type="button"
@@ -670,7 +687,7 @@ export function WindWorkflowReview({
         </div>
 
         <div className="review-actions">
-          {canEngineer && needsSubmission && !anyPending ? (
+          {canEngineer && !isIssued && needsSubmission && !anyPending ? (
             <button
               className="button button-primary"
               type="button"
@@ -681,7 +698,7 @@ export function WindWorkflowReview({
             </button>
           ) : null}
 
-          {canReview && anyPending ? (
+          {canReview && !isIssued && anyPending ? (
             <>
               <textarea
                 rows={3}
@@ -710,7 +727,7 @@ export function WindWorkflowReview({
             </>
           ) : null}
 
-          {canReview && allApproved ? (
+          {canReview && !isIssued && allApproved ? (
             <button
               className="button button-primary"
               type="button"

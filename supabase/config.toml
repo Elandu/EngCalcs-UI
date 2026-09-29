@@ -1,5 +1,8 @@
 project_id = "amfmmkonklwcohbsdiic"
 
+[functions.opencalcs-run-calculation-v3]
+verify_jwt = true
+
 [functions.opencalcs-run-calculation-v2]
 verify_jwt = true
 
