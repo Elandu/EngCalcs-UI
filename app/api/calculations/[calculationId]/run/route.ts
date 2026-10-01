@@ -12,6 +12,8 @@ type RunRequest = {
   title?: string;
   inputs?: Json;
   linkedInputs?: LinkedInputRequest[];
+  revisionCalculationId?: string;
+  expectedRunId?: string;
 };
 
 type LinkedInputRequest = {
@@ -48,6 +50,10 @@ export async function POST(
 
   const body = payload as RunRequest;
   const linkedInputs = body.linkedInputs ?? [];
+  const isRevision = body.revisionCalculationId !== undefined || body.expectedRunId !== undefined;
+  if (isRevision && (!UUID_PATTERN.test(body.revisionCalculationId ?? "") || !UUID_PATTERN.test(body.expectedRunId ?? ""))) {
+    return NextResponse.json({ error: "A revision requires its calculation and latest run IDs." }, { status: 400 });
+  }
 
   if (
     !Array.isArray(linkedInputs) ||
@@ -68,8 +74,8 @@ export async function POST(
   }
 
   if (
-    !body.projectId ||
-    !body.title?.trim() ||
+    typeof body.projectId !== "string" || !UUID_PATTERN.test(body.projectId) ||
+    typeof body.title !== "string" || !body.title.trim() || body.title.trim().length > 200 ||
     !body.inputs ||
     typeof body.inputs !== "object" ||
     Array.isArray(body.inputs)
@@ -88,7 +94,7 @@ export async function POST(
   }
 
   const { data, error } = await supabase.functions.invoke(
-    calculationRunnerFunction(linkedInputs.length > 0),
+    calculationRunnerFunction(linkedInputs.length > 0, isRevision),
     {
       body: {
         projectId: body.projectId,
@@ -96,11 +102,15 @@ export async function POST(
         title: body.title.trim(),
         inputs: body.inputs,
         linkedInputs,
+        ...(isRevision ? { revisionCalculationId: body.revisionCalculationId, expectedRunId: body.expectedRunId } : {}),
       },
     },
   );
 
-  const failure = calculationRunFailure(error, data, linkedInputs.length > 0);
+  const failureBody = error && "context" in error && error.context instanceof Response
+    ? await error.context.clone().json().catch(() => data)
+    : data;
+  const failure = calculationRunFailure(error, failureBody, linkedInputs.length > 0, isRevision);
   if (failure) {
     return NextResponse.json(
       { error: failure.message },

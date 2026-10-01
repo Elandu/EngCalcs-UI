@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
+import { expectedRunIdsMatch, isDefiniteRpcRejection, isUuid, rpcFailure } from "../_shared/wind-workflow-rpc.mjs";
 
 const OPENCALCS_API_URL =
   Deno.env.get("OPENCALCS_API_URL") ?? "https://opencalcs-api.onrender.com";
@@ -21,27 +22,23 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
+async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, "0")
   ).join("");
 }
 
-async function ensurePrivateBucket(admin: ReturnType<typeof adminClient>) {
+async function requirePrivateBucket(admin: ReturnType<typeof adminClient>) {
   const { data: buckets, error: listError } = await admin.storage.listBuckets();
   if (listError) throw new Error(listError.message);
 
-  if (!buckets?.some((bucket) => bucket.id === REPORT_BUCKET)) {
-    const { error: createError } = await admin.storage.createBucket(
-      REPORT_BUCKET,
-      {
-        public: false,
-        allowedMimeTypes: ["application/pdf"],
-        fileSizeLimit: "20MB",
-      },
-    );
-    if (createError) throw new Error(createError.message);
+  const reportBucket = buckets?.find((bucket) => bucket.id === REPORT_BUCKET);
+  if (!reportBucket) {
+    throw new Error(`Required private storage bucket '${REPORT_BUCKET}' is not configured.`);
+  }
+  if (reportBucket.public) {
+    throw new Error(`Storage bucket '${REPORT_BUCKET}' must be private before issuing reports.`);
   }
 }
 
@@ -62,38 +59,53 @@ Deno.serve(async (req: Request) => {
   const body = await req.json().catch(() => null);
   const projectId = body?.projectId;
   const workflowInstanceId = body?.workflowInstanceId;
+  const expectedRunIds = body?.expectedRunIds;
 
-  if (!projectId || !workflowInstanceId) {
-    return json({ error: "projectId and workflowInstanceId are required" }, 400);
+  if (!isUuid(projectId) || !isUuid(workflowInstanceId) ||
+    !expectedRunIds || typeof expectedRunIds !== "object" || Array.isArray(expectedRunIds) ||
+    Object.keys(expectedRunIds).length !== 6 ||
+    !Object.entries(expectedRunIds).every(([calculationId, runId]) => isUuid(calculationId) && isUuid(runId))) {
+    return json({ error: "projectId, workflowInstanceId and the six displayed run IDs are required" }, 400);
   }
 
-  const { data: project } = await admin
+  const { data: project, error: projectError } = await admin
     .from("projects")
     .select("id, organisation_id, project_number, name, address, standards_region")
     .eq("id", projectId)
     .maybeSingle();
+  if (projectError) return json({ error: projectError.message }, 500);
   if (!project) return json({ error: "Project not found" }, 404);
 
-  const { data: membership } = await admin
+  const { data: membership, error: membershipError } = await admin
     .from("organisation_members")
     .select("role")
     .eq("organisation_id", project.organisation_id)
     .eq("user_id", user.id)
     .maybeSingle();
 
+  if (membershipError) return json({ error: membershipError.message }, 500);
   if (!membership || !["owner", "admin", "reviewer"].includes(membership.role)) {
     return json({ error: "Reviewer, admin or owner access required to issue" }, 403);
   }
 
   const { data: calculations, error: calculationsError } = await admin
     .from("calculations")
-    .select("id, stage_key, title, calculation_definition_id, sort_order")
+    .select("id, stage_key, title, calculation_definition_id, sort_order, state")
     .eq("project_id", projectId)
     .eq("workflow_instance_id", workflowInstanceId)
     .order("sort_order", { ascending: true });
 
-  if (calculationsError || !calculations || calculations.length !== 6) {
+  if (calculationsError) return json({ error: calculationsError.message }, 500);
+  if (!calculations || calculations.length !== 6) {
     return json({ error: "Wind workflow graph not found or incomplete" }, 404);
+  }
+  if (calculations.some((calculation) => calculation.state === "issued")) {
+    return json({ error: "This Wind workflow has already been issued." }, 409);
+  }
+  const expectedStages = new Set(["site", "wind_region", "terrain", "shielding", "topography", "design"]);
+  if (calculations.some((calculation) => !expectedStages.has(calculation.stage_key ?? "")) ||
+    new Set(calculations.map((calculation) => calculation.stage_key)).size !== 6) {
+    return json({ error: "Wind workflow graph is incomplete" }, 409);
   }
 
   const calculationIds = calculations.map((calculation) => calculation.id);
@@ -103,11 +115,12 @@ Deno.serve(async (req: Request) => {
       "id, calculation_id, parent_run_id, run_sequence, engine_plugin_id, engine_plugin_version, calculation_definition_id, calculation_definition_version, standard_reference_json, input_json, result_json, warnings_json, provenance_json, input_hash, created_by, created_at",
     )
     .in("calculation_id", calculationIds)
-    .order("run_sequence", { ascending: false });
+    .order("run_sequence", { ascending: false })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
 
-  if (runsError || !runs) {
-    return json({ error: runsError?.message ?? "Unable to load run history" }, 500);
-  }
+  if (runsError) return json({ error: runsError.message }, 500);
+  if (!runs) return json({ error: "Unable to load run history" }, 500);
 
   const latestByCalculation = new Map<string, (typeof runs)[number]>();
   for (const run of runs) {
@@ -124,15 +137,17 @@ Deno.serve(async (req: Request) => {
     (calculation) => latestByCalculation.get(calculation.id)!,
   );
   const latestRunIds = latestRuns.map((run) => run.id);
+  if (!expectedRunIdsMatch(expectedRunIds, calculations, latestByCalculation)) {
+    return json({ error: "Wind workflow changed. Reload before issuing." }, 409);
+  }
 
   const { data: reviews, error: reviewsError } = await admin
     .from("calculation_run_reviews")
     .select("run_id, status, reviewer_id, review_note, reviewed_at, submitted_by, submitted_at")
     .in("run_id", latestRunIds);
 
-  if (reviewsError || !reviews) {
-    return json({ error: reviewsError?.message ?? "Unable to load reviews" }, 500);
-  }
+  if (reviewsError) return json({ error: reviewsError.message }, 500);
+  if (!reviews) return json({ error: "Unable to load reviews" }, 500);
 
   if (
     reviews.length !== latestRunIds.length ||
@@ -259,13 +274,13 @@ Deno.serve(async (req: Request) => {
     }, 502);
   }
 
-  const pdfBytes = new Uint8Array(await reportResponse.arrayBuffer());
-  if (!pdfBytes.length) return json({ error: "Generated PDF was empty" }, 502);
+  const pdfBytes = await reportResponse.arrayBuffer();
+  if (!pdfBytes.byteLength) return json({ error: "Generated PDF was empty" }, 502);
 
   const reportHash = await sha256Hex(pdfBytes);
 
   try {
-    await ensurePrivateBucket(admin);
+    await requirePrivateBucket(admin);
   } catch (error) {
     return json({
       error: `Unable to prepare report storage: ${error instanceof Error ? error.message : "unknown error"}`,
@@ -276,7 +291,7 @@ Deno.serve(async (req: Request) => {
     ? project.project_number.replace(/[^A-Za-z0-9._-]+/g, "-")
     : projectId;
   const storagePath =
-    `${project.organisation_id}/${projectSegment}/${workflowInstanceId}/wind-calculation-pack-r${revision}.pdf`;
+    `${project.organisation_id}/${projectSegment}/${workflowInstanceId}/wind-calculation-pack-${crypto.randomUUID()}.pdf`;
 
   const { error: uploadError } = await admin.storage
     .from(REPORT_BUCKET)
@@ -288,59 +303,60 @@ Deno.serve(async (req: Request) => {
 
   if (uploadError) return json({ error: uploadError.message }, 500);
 
-  const { data: report, error: reportError } = await admin
-    .from("reports")
-    .insert({
-      project_id: projectId,
-      calculation_run_id: designRun.id,
-      workflow_instance_id: workflowInstanceId,
-      storage_path: storagePath,
-      report_type: "wind_calculation_pack",
-      title: "Wind Calculation Pack",
-      revision,
-      status: "issued",
-      report_hash: reportHash,
-      metadata_json: {
-        standard: designRun.standard_reference_json,
-        latest_run_ids: latestRunIds,
-        runtime: provenance.runtime ?? null,
-        engine: provenance.engine ?? null,
-        workflow_instance_id: workflowInstanceId,
+  const expectedReviews = [...reviews].sort((a, b) => a.run_id.localeCompare(b.run_id));
+  const { data: issued, error: issueError } = await admin.rpc("opencalcs_wind_workflow_action", {
+    p_project_id: projectId,
+    p_actor_id: user.id,
+    p_workflow_id: workflowInstanceId,
+    p_action: "issue",
+    p_expected_run_ids: expectedRunIds,
+    p_payload: {
+      expected_reviews: expectedReviews,
+      report: {
+        storage_path: storagePath,
+        revision,
+        report_hash: reportHash,
+        issued_at: issuedAt,
+        supersedes_report_id: priorReport?.id ?? null,
+        metadata_json: {
+          standard: designRun.standard_reference_json,
+          latest_run_ids: latestRunIds,
+          runtime: provenance.runtime ?? null,
+          engine: provenance.engine ?? null,
+          workflow_instance_id: workflowInstanceId,
+        },
       },
-      supersedes_report_id: priorReport?.id ?? null,
-      issued_by: user.id,
-      issued_at: issuedAt,
-    })
-    .select("id, revision, issued_at, storage_path, report_hash")
-    .single();
-
-  if (reportError || !report) {
-    await admin.storage.from(REPORT_BUCKET).remove([storagePath]);
-    return json({
-      error: reportError?.message ?? "Unable to save report record",
-    }, 500);
-  }
-
-  await admin
-    .from("calculations")
-    .update({ state: "issued" })
-    .eq("workflow_instance_id", workflowInstanceId);
-
-  await admin.from("audit_events").insert({
-    organisation_id: project.organisation_id,
-    project_id: projectId,
-    actor_user_id: user.id,
-    event_type: "wind_workflow.issued",
-    entity_type: "report",
-    entity_id: report.id,
-    metadata_json: {
-      workflow_instance_id: workflowInstanceId,
-      report_id: report.id,
-      revision,
-      report_hash: reportHash,
-      latest_run_ids: latestRunIds,
     },
   });
+
+  let report: { id: string; revision: number; issued_at: string; storage_path: string; report_hash: string } | null =
+    !issueError && issued && typeof issued === "object" && "report" in issued
+      ? (issued as { report: { id: string; revision: number; issued_at: string; storage_path: string; report_hash: string } }).report
+      : null;
+  if (issueError && isDefiniteRpcRejection(issueError)) {
+    const { error: cleanupError } = await admin.storage.from(REPORT_BUCKET).remove([storagePath]);
+    const failure = rpcFailure(issueError);
+    return json({ ...failure, ...(cleanupError ? { cleanupError: cleanupError.message } : {}) }, failure.status);
+  }
+  if (!report) {
+    // A transport timeout or malformed response may follow a successful commit.
+    // Resolve by the unique uploaded path before deciding what outcome to report.
+    const { data: recoveredReport, error: recoveryError } = await admin
+      .from("reports")
+      .select("id, revision, issued_at, storage_path, report_hash")
+      .eq("storage_path", storagePath)
+      .maybeSingle();
+    if (recoveredReport) report = recoveredReport;
+    else {
+      return json({
+        error: recoveryError
+          ? "Issue outcome could not be confirmed. The uploaded PDF was retained for recovery."
+          : issueError
+            ? "Issue outcome is unknown. The uploaded PDF was retained for recovery."
+            : "Issue returned no report record. The uploaded PDF was retained for recovery.",
+      }, 503);
+    }
+  }
 
   const { data: signed, error: signedError } = await admin.storage
     .from(REPORT_BUCKET)

@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.116.0";
+import { expectedRunIdsMatch, isUuid, rpcFailure, validateWindWorkflowEnvelope } from "../_shared/wind-workflow-rpc.mjs";
 
 const OPENCALCS_API_URL =
   Deno.env.get("OPENCALCS_API_URL") ?? "https://opencalcs-api.onrender.com";
@@ -59,29 +60,6 @@ function variableRows(workflow: Record<string, unknown>, variable: string) {
   );
 }
 
-function stageForVariable(variable: WorkflowOverride["variable"]): StageKey {
-  if (variable === "VR" || variable === "Md") return "wind_region";
-  if (variable === "Mzcat") return "terrain";
-  if (variable === "Ms") return "shielding";
-  if (variable === "Mt") return "topography";
-  return "design";
-}
-
-function affectedStages(
-  existingWorkflow: boolean,
-  overrides: WorkflowOverride[],
-): Set<StageKey> {
-  if (!existingWorkflow || !overrides.length) {
-    return new Set(STAGES.map((stage) => stage.key));
-  }
-
-  const affected = new Set<StageKey>(["design"]);
-  for (const override of overrides) {
-    affected.add(stageForVariable(override.variable));
-  }
-  return affected;
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -101,12 +79,25 @@ Deno.serve(async (req: Request) => {
   const rawInputs = body?.inputs;
   const requestedWorkflowId =
     typeof body?.workflowInstanceId === "string" ? body.workflowInstanceId : null;
+  const expectedRunIds = body?.expectedRunIds ?? {};
+  if (requestedWorkflowId && !isUuid(requestedWorkflowId)) {
+    return json({ error: "Invalid workflowInstanceId." }, 400);
+  }
+  if (!requestedWorkflowId && (!expectedRunIds || typeof expectedRunIds !== "object" || Array.isArray(expectedRunIds) || Object.keys(expectedRunIds).length !== 0)) {
+    return json({ error: "A new workflow requires an empty expectedRunIds object." }, 400);
+  }
   const overrides: WorkflowOverride[] = Array.isArray(body?.overrides)
     ? body.overrides
     : [];
 
-  if (!projectId || !rawInputs || typeof rawInputs !== "object") {
+  if (!isUuid(projectId) || !rawInputs || typeof rawInputs !== "object" || Array.isArray(rawInputs)) {
     return json({ error: "projectId and inputs are required" }, 400);
+  }
+  if (!Array.isArray(body?.overrides) && body?.overrides !== undefined) {
+    return json({ error: "overrides must be an array" }, 400);
+  }
+  if (!requestedWorkflowId && overrides.length) {
+    return json({ error: "Overrides can only be applied to an existing Wind workflow." }, 409);
   }
 
   for (const override of overrides) {
@@ -128,38 +119,96 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  const { data: project } = await admin
+  const { data: project, error: projectError } = await admin
     .from("projects")
     .select("id, organisation_id, project_number, name, address")
     .eq("id", projectId)
     .maybeSingle();
+  if (projectError) return json({ error: projectError.message }, 500);
   if (!project) return json({ error: "Project not found" }, 404);
 
-  const { data: membership } = await admin
+  const { data: membership, error: membershipError } = await admin
     .from("organisation_members")
     .select("role")
     .eq("organisation_id", project.organisation_id)
     .eq("user_id", user.id)
     .maybeSingle();
+  if (membershipError) return json({ error: membershipError.message }, 500);
   if (!membership || !["owner", "admin", "engineer"].includes(membership.role)) {
     return json({ error: "Engineer access required" }, 403);
   }
 
-  const activeOverrideRows = requestedWorkflowId
-    ? (
-        await admin
-          .from("calculation_overrides")
-          .select(
-            "id, variable, direction, override_value, reason, source_reference, original_value",
-          )
-          .eq("workflow_instance_id", requestedWorkflowId)
-          .eq("is_active", true)
-          .order("created_at", { ascending: true })
-      ).data ?? []
-    : [];
+  let calculations: Array<{
+    id: string;
+    calculation_definition_id: string;
+    stage_key: string | null;
+    state: string;
+  }> = [];
+  if (requestedWorkflowId) {
+    const { data, error } = await admin
+      .from("calculations")
+      .select("id, calculation_definition_id, stage_key, state")
+      .eq("project_id", projectId)
+      .eq("workflow_instance_id", requestedWorkflowId)
+      .order("sort_order", { ascending: true });
+    if (error) return json({ error: error.message }, 500);
+    if (!data || data.length !== STAGES.length) {
+      return json({ error: "Existing Wind workflow graph was not found or is incomplete" }, 404);
+    }
+    calculations = data;
+    if (calculations.some((row) => row.state === "issued")) {
+      return json({ error: "Issued Wind workflows cannot be revised." }, 409);
+    }
+  }
+
+  if (requestedWorkflowId) {
+    for (const stage of STAGES) {
+      const rows = calculations.filter((calculation) => calculation.stage_key === stage.key);
+      if (rows.length !== 1 || rows[0].calculation_definition_id !== stage.definition) {
+        return json({ error: `Wind workflow stage ${stage.key} is missing or incompatible.` }, 409);
+      }
+    }
+  }
+
+  const calculationIds = calculations.map((calculation) => calculation.id);
+  const { data: existingRuns, error: existingRunsError } = requestedWorkflowId
+    ? await admin
+      .from("calculation_runs")
+      .select("id, calculation_id, run_sequence, created_at")
+      .in("calculation_id", calculationIds)
+      .order("run_sequence", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+    : { data: [], error: null };
+  if (existingRunsError) return json({ error: existingRunsError.message }, 500);
+
+  const latestRunByCalculation = new Map<string, {
+    id: string;
+    calculation_id: string;
+    run_sequence: number;
+  }>();
+  for (const run of existingRuns ?? []) {
+    if (!latestRunByCalculation.has(run.calculation_id)) latestRunByCalculation.set(run.calculation_id, run);
+  }
+  if (requestedWorkflowId && (
+    latestRunByCalculation.size !== STAGES.length ||
+    !expectedRunIdsMatch(expectedRunIds, calculations, latestRunByCalculation)
+  )) {
+    return json({ error: "Wind workflow changed. Reload before saving." }, 409);
+  }
+
+  const { data: activeOverrideRows, error: overrideReadError } = requestedWorkflowId
+    ? await admin
+      .from("calculation_overrides")
+      .select("id, variable, direction, override_value, reason, source_reference, original_value")
+      .eq("workflow_instance_id", requestedWorkflowId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+    : { data: [], error: null };
+  if (overrideReadError) return json({ error: overrideReadError.message }, 500);
 
   const effectiveOverrideMap = new Map<string, WorkflowOverride>();
-  for (const row of activeOverrideRows) {
+  for (const row of activeOverrideRows ?? []) {
     const key = `${row.variable}:${row.direction ?? ""}`;
     effectiveOverrideMap.set(key, {
       variable: row.variable,
@@ -175,56 +224,6 @@ Deno.serve(async (req: Request) => {
     effectiveOverrideMap.set(key, override);
   }
   const effectiveOverrides = [...effectiveOverrideMap.values()];
-
-  const workflowInstanceId = requestedWorkflowId ?? crypto.randomUUID();
-  let calculations: Array<{
-    id: string;
-    calculation_definition_id: string;
-    stage_key: string | null;
-    state: string;
-  }> = [];
-
-  if (requestedWorkflowId) {
-    const { data, error } = await admin
-      .from("calculations")
-      .select("id, calculation_definition_id, stage_key, state")
-      .eq("project_id", projectId)
-      .eq("workflow_instance_id", requestedWorkflowId)
-      .order("sort_order", { ascending: true });
-
-    if (error || !data || data.length !== STAGES.length) {
-      return json({ error: "Existing Wind workflow graph was not found or is incomplete" }, 404);
-    }
-    calculations = data;
-  } else {
-    const rows = STAGES.map((stage, index) => ({
-      project_id: projectId,
-      workflow_instance_id: workflowInstanceId,
-      stage_key: stage.key,
-      calculation_definition_id: stage.definition,
-      title: stage.title,
-      sort_order: index,
-      state: "draft",
-      created_by: user.id,
-    }));
-
-    const { data, error } = await admin
-      .from("calculations")
-      .insert(rows)
-      .select("id, calculation_definition_id, stage_key, state");
-
-    if (error || !data || data.length !== STAGES.length) {
-      return json({ error: error?.message ?? "Unable to create Wind workflow graph" }, 500);
-    }
-    calculations = data;
-  }
-
-  const calcByStage = new Map<StageKey, (typeof calculations)[number]>();
-  for (const stage of STAGES) {
-    const row = calculations.find((calculation) => calculation.stage_key === stage.key);
-    if (!row) return json({ error: `Missing workflow stage: ${stage.key}` }, 500);
-    calcByStage.set(stage.key, row);
-  }
 
   const inputs = {
     ...rawInputs,
@@ -248,12 +247,6 @@ Deno.serve(async (req: Request) => {
   });
 
   if (!workflowResponse.ok) {
-    if (!requestedWorkflowId) {
-      await admin
-        .from("calculations")
-        .delete()
-        .eq("workflow_instance_id", workflowInstanceId);
-    }
     const errorPayload = await workflowResponse.json().catch(() => ({}));
     return json(
       { error: errorPayload.detail ?? "Wind assessment failed" },
@@ -263,9 +256,11 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  const envelope = await workflowResponse.json();
+  const envelope = await workflowResponse.json().catch(() => null);
+  const envelopeError = validateWindWorkflowEnvelope(envelope);
+  if (envelopeError) return json({ error: envelopeError }, 502);
   const stages = envelope.stages ?? {};
-  const workflow = envelope.result ?? {};
+  const workflow = envelope.stages.workflow.workflow;
   const siteAnalysis = stages.site?.site_analysis ?? {};
   const windInputs = stages.wind_inputs ?? {};
   const terrainEvidence = stages.terrain?.terrain_category_evidence ?? {};
@@ -305,244 +300,86 @@ Deno.serve(async (req: Request) => {
     }],
   ]);
 
-  const affected = affectedStages(Boolean(requestedWorkflowId), overrides);
-  const affectedCalculationIds = [...affected].map(
-    (stage) => calcByStage.get(stage)!.id,
-  );
-
-  const { data: existingRuns, error: existingRunsError } = affectedCalculationIds.length
-    ? await admin
-        .from("calculation_runs")
-        .select("id, calculation_id, run_sequence, created_at")
-        .in("calculation_id", affectedCalculationIds)
-        .order("run_sequence", { ascending: false })
-    : { data: [], error: null };
-
-  if (existingRunsError) {
-    return json({ error: existingRunsError.message }, 500);
-  }
-
-  const latestRunByCalculation = new Map<string, {
-    id: string;
-    calculation_id: string;
-    run_sequence: number;
-  }>();
-  for (const run of existingRuns ?? []) {
-    if (!latestRunByCalculation.has(run.calculation_id)) {
-      latestRunByCalculation.set(run.calculation_id, run);
-    }
-  }
-
   const standard = envelope.standard ?? {
     name: "AS/NZS 1170.2",
     edition: "2021",
   };
   const inputHash = await sha256(JSON.stringify(inputs));
 
-  const runRows = [...affected].map((stage) => {
-    const calculation = calcByStage.get(stage)!;
-    const previousRun = latestRunByCalculation.get(calculation.id);
-    const result = stageResults.get(stage) ?? {};
+  const stagePayload = STAGES.map((stage) => {
+    const result = stageResults.get(stage.key) ?? {};
     const resultObject =
       result && typeof result === "object"
         ? result as Record<string, unknown>
         : {};
 
     return {
-      calculation_id: calculation.id,
-      parent_run_id: previousRun?.id ?? null,
-      run_sequence: (previousRun?.run_sequence ?? 0) + 1,
-      engine_plugin_id: envelope.plugin?.id ?? "au.openwind",
-      engine_plugin_version: envelope.plugin?.version ?? "unknown",
-      calculation_definition_id: calculation.calculation_definition_id,
-      calculation_definition_version: "1",
-      standard_reference_json: standard,
-      input_json: {
-        workflow_instance_id: workflowInstanceId,
-        workflow_id: envelope.workflow_id,
-        stage,
-        workflow_inputs: inputs,
+      stage_key: stage.key,
+      title: stage.title,
+      definition: stage.definition,
+      run: {
+        engine_plugin_id: envelope.plugin?.id ?? "au.openwind",
+        engine_plugin_version: envelope.plugin?.version ?? "unknown",
+        calculation_definition_version: "1",
+        standard_reference_json: standard,
+        input_json: {
+          ...(requestedWorkflowId ? { workflow_instance_id: requestedWorkflowId } : {}),
+          workflow_id: envelope.workflow_id,
+          stage: stage.key,
+          workflow_inputs: inputs,
+        },
+        result_json: result,
+        warnings_json: Array.isArray(resultObject.warnings)
+          ? resultObject.warnings
+          : [],
+        provenance_json: {
+          source: "opencalcs-api",
+          endpoint: base,
+          runtime: envelope.runtime ?? null,
+          engine: envelope.plugin ?? null,
+          standard,
+          ...(requestedWorkflowId ? { workflow_instance_id: requestedWorkflowId } : {}),
+          workflow_id: envelope.workflow_id,
+          stage: stage.key,
+        },
+        input_hash: inputHash,
       },
-      result_json: result,
-      warnings_json: Array.isArray(resultObject.warnings)
-        ? resultObject.warnings
-        : [],
-      provenance_json: {
-        source: "opencalcs-api",
-        endpoint: base,
-        runtime: envelope.runtime ?? null,
-        engine: envelope.plugin ?? null,
-        standard,
-        workflow_instance_id: workflowInstanceId,
-        workflow_id: envelope.workflow_id,
-        stage,
-      },
-      input_hash: inputHash,
-      created_by: user.id,
     };
   });
 
-  const { data: runs, error: runsError } = await admin
-    .from("calculation_runs")
-    .insert(runRows)
-    .select("id, calculation_id, parent_run_id, run_sequence, created_at");
-
-  if (runsError || !runs || runs.length !== runRows.length) {
-    if (!requestedWorkflowId) {
-      await admin
-        .from("calculations")
-        .delete()
-        .eq("workflow_instance_id", workflowInstanceId);
-    }
-    return json({ error: runsError?.message ?? "Unable to save Wind run history" }, 500);
-  }
-
-  const newRunByCalculation = new Map(
-    runs.map((run) => [run.calculation_id, run]),
-  );
-
-  if (!requestedWorkflowId) {
-    const edgeSpecs = [
-      ["site", "site", "wind_region", "site"],
-      ["site", "site", "terrain", "site"],
-      ["terrain", "terrain_evidence", "shielding", "terrain_evidence"],
-      ["site", "profiles/features", "topography", "terrain_profiles"],
-      ["wind_region", "wind_inputs", "design", "wind_inputs"],
-      ["terrain", "mzcat", "design", "mzcat"],
-      ["shielding", "ms", "design", "ms"],
-      ["topography", "mt", "design", "mt"],
-    ] as const;
-
-    const { error: linkError } = await admin
-      .from("calculation_links")
-      .insert(edgeSpecs.map(
-        ([sourceKey, sourcePath, targetKey, targetPath]) => ({
-          source_calculation_id: calcByStage.get(sourceKey)!.id,
-          source_output_path: sourcePath,
-          target_calculation_id: calcByStage.get(targetKey)!.id,
-          target_input_path: targetPath,
-          created_by: user.id,
-        }),
-      ));
-
-    if (linkError) {
-      await admin
-        .from("calculations")
-        .delete()
-        .eq("workflow_instance_id", workflowInstanceId);
-      return json({ error: linkError.message }, 500);
-    }
-  }
-
-  if (overrides.length) {
-    const insertedOverrides: Array<{
-      id: string;
-      variable: string;
-      direction: string | null;
-    }> = [];
-
-    for (const override of overrides) {
-      const stage = stageForVariable(override.variable);
-      const calculation = calcByStage.get(stage)!;
-      const previousRun = latestRunByCalculation.get(calculation.id);
-      const appliedRun = newRunByCalculation.get(calculation.id);
-
-      if (!previousRun) {
-        return json({
-          error: `Cannot override ${override.variable} before an initial workflow run exists`,
-        }, 409);
-      }
-
-      const { data: inserted, error: insertOverrideError } = await admin
-        .from("calculation_overrides")
-        .insert({
-          workflow_instance_id: workflowInstanceId,
-          calculation_id: calculation.id,
-          source_run_id: previousRun.id,
-          applied_run_id: appliedRun?.id ?? null,
-          variable: override.variable,
-          direction: override.direction ?? null,
-          original_value: override.original_value ?? null,
-          override_value: override.override_value,
-          reason: override.reason.trim(),
-          source_reference: override.source_reference ?? null,
-          created_by: user.id,
-          is_active: true,
-        })
-        .select("id, variable, direction")
-        .single();
-
-      if (insertOverrideError || !inserted) {
-        return json({
-          error: insertOverrideError?.message ?? "Unable to save override",
-        }, 500);
-      }
-
-      insertedOverrides.push(inserted);
-
-      const matchingPrior = activeOverrideRows.filter(
-        (row) =>
-          row.variable === override.variable &&
-          (row.direction ?? null) === (override.direction ?? null),
-      );
-
-      if (matchingPrior.length) {
-        const { error: supersedeError } = await admin
-          .from("calculation_overrides")
-          .update({
-            is_active: false,
-            superseded_at: new Date().toISOString(),
-            superseded_by_id: inserted.id,
-          })
-          .in("id", matchingPrior.map((row) => row.id));
-
-        if (supersedeError) {
-          return json({ error: supersedeError.message }, 500);
-        }
-      }
-    }
-  }
-
-  await admin
-    .from("calculations")
-    .update({ state: "draft" })
-    .eq("workflow_instance_id", workflowInstanceId)
-    .in("stage_key", [...affected]);
-
-  if (!project.address && typeof inputs.address === "string") {
-    await admin
-      .from("projects")
-      .update({ address: inputs.address })
-      .eq("id", projectId);
-  }
-
-  await admin.from("audit_events").insert({
-    organisation_id: project.organisation_id,
-    project_id: projectId,
-    actor_user_id: user.id,
-    event_type: requestedWorkflowId
-      ? "wind_workflow.rerun"
-      : "wind_workflow.run",
-    entity_type: "calculation",
-    entity_id: calcByStage.get("design")!.id,
-    metadata_json: {
-      workflow_instance_id: workflowInstanceId,
+  const { data: saved, error: saveError } = await admin.rpc("opencalcs_wind_workflow_action", {
+    p_project_id: projectId,
+    p_actor_id: user.id,
+    p_workflow_id: requestedWorkflowId,
+    p_action: "save",
+    p_expected_run_ids: expectedRunIds ?? {},
+    p_payload: {
+      stages: stagePayload,
+      overrides,
       workflow_id: envelope.workflow_id,
-      affected_stages: [...affected],
-      override_count: overrides.length,
-      active_override_count: effectiveOverrides.length,
-      run_ids: runs.map((run) => run.id),
+      ...(!project.address && typeof inputs.address === "string"
+        ? { project_address: inputs.address }
+        : {}),
     },
   });
+  if (saveError || !saved) {
+    const failure = rpcFailure(saveError);
+    return json(failure, failure.status);
+  }
+
+  const result = saved as {
+    workflowInstanceId: string;
+    calculationIds: Record<StageKey, string>;
+    runs: Array<{ id: string; calculation_id: string; parent_run_id: string | null; run_sequence: number; created_at: string }>;
+    affectedStages: StageKey[];
+  };
 
   return json({
-    workflowInstanceId,
+    workflowInstanceId: result.workflowInstanceId,
     workflowId: envelope.workflow_id,
-    calculationIds: Object.fromEntries(
-      STAGES.map((stage) => [stage.key, calcByStage.get(stage.key)!.id]),
-    ),
-    affectedStages: [...affected],
-    runs,
+    calculationIds: result.calculationIds,
+    affectedStages: result.affectedStages,
+    runs: result.runs,
     stages: envelope.stages,
     result: workflow,
     runtime: envelope.runtime,

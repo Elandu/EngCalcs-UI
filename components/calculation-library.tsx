@@ -3,21 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-
-type Definition = {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  version?: string;
-  standard?: { name?: string; edition?: string } | null;
-  plugin?: { id?: string; name?: string; version?: string; revision?: string | null } | null;
-  runtime?: { name?: string; version?: string; revision?: string | null } | null;
-  input_schema?: {
-    required?: string[];
-    properties?: Record<string, { type?: string; unit?: string; description?: string }>;
-  };
-};
+import { calculationCatalogue, calculationWorkspaceHref, WIND_ASSESSMENT_ID, type CatalogueDefinition as Definition } from "@/lib/calculation-catalogue";
 
 type Project = { id: string; name: string; project_number: string | null; address: string | null };
 
@@ -59,7 +45,8 @@ export function CalculationLibrary({
       .then(async (response) => {
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "Unable to load calculations.");
-        return payload as Definition[];
+        if (!Array.isArray(payload)) throw new Error("The calculation library returned an invalid response.");
+        return calculationCatalogue(payload as Definition[]);
       })
       .then((items) => {
         if (active) {
@@ -89,7 +76,7 @@ export function CalculationLibrary({
 
   function useCalculation() {
     if (!selected || !projectId) return;
-    router.push(`/dashboard/projects/${projectId}?calculation=${encodeURIComponent(selected.id)}#calculations`);
+    router.push(calculationWorkspaceHref(selected.id, projectId));
   }
 
   function retryCatalog() {
@@ -180,8 +167,12 @@ export function CalculationLibrary({
               <h2>{selected.name}</h2>
               <p>{selected.description}</p>
               <dl>
-                <div><dt>Definition</dt><dd><code>{selected.id}</code></dd></div>
-                <div><dt>Calculation version</dt><dd>{selected.version || "Not reported"}</dd></div>
+                {selected.id === WIND_ASSESSMENT_ID ? (
+                  <div><dt>Assessment</dt><dd>Combined wind calculation · six linked stages</dd></div>
+                ) : <>
+                  <div><dt>Definition</dt><dd><code>{selected.id}</code></dd></div>
+                  <div><dt>Calculation version</dt><dd>{selected.version || "Not reported"}</dd></div>
+                </>}
                 <div><dt>Standard</dt><dd>{selected.standard?.name || "Not specified"}{selected.standard?.edition ? ` · ${selected.standard.edition}` : ""}</dd></div>
                 <div><dt>Category</dt><dd>{titleCase(selected.category || "Engineering")}</dd></div>
                 <div><dt>Engine</dt><dd>{[selected.plugin?.name ? `${selected.plugin.name}${selected.plugin.id ? ` (${selected.plugin.id})` : ""}` : selected.plugin?.id, selected.plugin?.version ? `v${selected.plugin.version}` : ""].filter(Boolean).join(" · ") || "Not reported"}</dd></div>
@@ -189,6 +180,7 @@ export function CalculationLibrary({
                 <div><dt>Runtime</dt><dd>{[selected.runtime?.name, selected.runtime?.version ? `v${selected.runtime.version}` : ""].filter(Boolean).join(" · ") || "Not reported"}</dd></div>
                 <div><dt>Runtime revision</dt><dd><code>{reportedRevision(selected.runtime?.revision)}</code></dd></div>
               </dl>
+              {selected.id === WIND_ASSESSMENT_ID ? <p className="library-muted">Includes site, wind region, terrain, shielding, topography and design wind speed. Each stage keeps its saved inputs, results and review history, and its outputs can feed linked calculations.</p> : null}
               <h3>Inputs</h3>
               {Object.entries(selected.input_schema?.properties ?? {}).length ? (
                 <ul className="library-input-list">

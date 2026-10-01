@@ -5,7 +5,7 @@ import {
   matchesSchema,
   pointerPathsOverlap,
   windSourceLinkError,
-} from "./linked-validation.ts";
+} from "../opencalcs-run-calculation-v2/linked-validation.ts";
 import { resolveCalculationOutputSchema } from "../../../lib/workflow-output-schema.mjs";
 
 const OPENCALCS_API_URL = Deno.env.get("OPENCALCS_API_URL") ??
@@ -208,6 +208,13 @@ Deno.serve(async (req: Request) => {
   const title = typeof body?.title === "string" ? body.title.trim() : "";
   const rawInputs = body?.inputs;
   const rawLinks = body?.linkedInputs ?? [];
+  const revisionCalculationId = body?.revisionCalculationId ?? null;
+  const expectedRunId = body?.expectedRunId ?? null;
+  if ((revisionCalculationId !== null && !isUuid(revisionCalculationId)) ||
+      (expectedRunId !== null && !isUuid(expectedRunId)) ||
+      Boolean(revisionCalculationId) !== Boolean(expectedRunId)) {
+    return json({ error: "A revision requires a calculation ID and its latest run ID." }, 400);
+  }
   if (
     !projectId || !calculationId || !title || title.length > 200 ||
     !isObject(rawInputs) || !Array.isArray(rawLinks) || rawLinks.length > 50
@@ -257,6 +264,19 @@ Deno.serve(async (req: Request) => {
   }
 
   const base = OPENCALCS_API_URL.replace(/\/$/, "");
+  if (revisionCalculationId) {
+    const { data: existing } = await admin.from("calculations")
+      .select("id, project_id, calculation_definition_id, stage_key, workflow_instance_id, state")
+      .eq("id", revisionCalculationId).maybeSingle();
+    if (!existing || existing.project_id !== projectId || existing.calculation_definition_id !== calculationId ||
+        existing.stage_key || existing.workflow_instance_id || existing.state === "issued") {
+      return json({ error: "This calculation cannot be revised here." }, 422);
+    }
+    const { data: latest } = await admin.from("calculation_runs").select("id")
+      .eq("calculation_id", revisionCalculationId).order("run_sequence", { ascending: false })
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (latest?.id !== expectedRunId) return json({ error: "Calculation changed. Reload before saving a revision." }, 409);
+  }
   const headers = {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
@@ -442,15 +462,14 @@ Deno.serve(async (req: Request) => {
   }
   const result = await runResponse.json();
 
-  // New linked runs share the revision transaction and project graph lock.
   const inputHash = await sha256(JSON.stringify(inputs));
   const { data: saved, error: saveError } = await admin.rpc("opencalcs_save_run", {
     p_project_id: projectId,
     p_actor_id: user.id,
     p_definition_id: calculationId,
     p_title: title,
-    p_calculation_id: null,
-    p_expected_run_id: null,
+    p_calculation_id: revisionCalculationId,
+    p_expected_run_id: expectedRunId,
     p_run: {
       engine_plugin_id: definition.plugin?.id ?? "unknown",
       engine_plugin_version: definition.plugin?.version ?? "unknown",

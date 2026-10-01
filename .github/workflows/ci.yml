@@ -27,12 +27,29 @@ jobs:
       - name: Tests
         run: npm test
 
+      - name: Database migration regression tests
+        run: npm run test:revisions-db
+
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
 
-      - name: Type-check linked calculation function
-        run: deno check --node-modules-dir=auto supabase/functions/opencalcs-run-calculation-v2/index.ts
+      - name: Type-check Supabase function entrypoints
+        run: |
+          check_root="$(mktemp -d)"
+          mkdir -p "$check_root/supabase" "$check_root/lib"
+          cp -R supabase/functions "$check_root/supabase/"
+          cp lib/workflow-output-schema.* "$check_root/lib/"
+          cd "$check_root"
+          for entrypoint in \
+            supabase/functions/opencalcs-run-calculation/index.ts \
+            supabase/functions/opencalcs-run-calculation-v2/index.ts \
+            supabase/functions/opencalcs-run-calculation-v3/index.ts \
+            supabase/functions/opencalcs-run-wind-workflow/index.ts \
+            supabase/functions/opencalcs-review-wind-workflow/index.ts \
+            supabase/functions/opencalcs-issue-wind-workflow/index.ts; do
+            deno check --no-config --node-modules-dir=none "$entrypoint"
+          done
 
       - name: Lint
         run: npm run lint

@@ -2,10 +2,13 @@ import { notFound, redirect } from "next/navigation";
 
 import { CalculationLauncher } from "@/components/calculation-launcher";
 import { WindSiteWorkflow } from "@/components/wind-site-workflow";
+import { WindCalculationWorkspace } from "@/components/wind-calculation-workspace";
 import { WindWorkflowReview } from "@/components/wind-workflow-review";
 import { WorkspaceHeader } from "@/components/workspace-header";
 import { createClient } from "@/lib/supabase/server";
 import { authPageHref } from "@/lib/safe-auth-redirect";
+import { calculationWorkspaceHref, isWindWorkspaceCalculation } from "@/lib/calculation-catalogue";
+import { revisionStatuses, type RevisionRun } from "@/lib/calculation-revisions";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +69,7 @@ export default async function ProjectPage({
   if (!userId) {
     const projectPath = `/dashboard/projects/${encodeURIComponent(projectId)}`;
     const next = initialCalculationId
-      ? `${projectPath}?${new URLSearchParams({ calculation: initialCalculationId }).toString()}#calculations`
+      ? calculationWorkspaceHref(initialCalculationId, projectId)
       : projectPath;
     redirect(authPageHref("login", next));
   }
@@ -114,6 +117,18 @@ export default async function ProjectPage({
 
   const calculationRows = calculations ?? [];
   const calculationIds = calculationRows.map((calculation) => calculation.id);
+  const revisionRuns: RevisionRun[] = [];
+  if (calculationIds.length) {
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await supabase.from("calculation_runs")
+        .select("id, calculation_id, run_sequence, provenance_json")
+        .in("calculation_id", calculationIds).order("id").range(offset, offset + 499);
+      if (error) throw new Error(`Unable to load revision state: ${error.message}`);
+      revisionRuns.push(...(data ?? []));
+      if (!data || data.length < 500) break;
+    }
+  }
+  const freshness = revisionStatuses(revisionRuns);
 
   const { data: links, error: linkError } = calculationIds.length
     ? await supabase
@@ -133,25 +148,37 @@ export default async function ProjectPage({
   );
 
   const standaloneCalculations = calculationRows.filter(
-    (calculation) => !calculation.stage_key,
+    (calculation) => !calculation.stage_key && !calculation.workflow_instance_id,
   );
   const standaloneCalculationIds = standaloneCalculations.map(
     (calculation) => calculation.id,
   );
-  const { data: standaloneRunRows, error: standaloneRunError } =
-    standaloneCalculationIds.length
-      ? await supabase
-          .from("calculation_runs")
-          .select(
-            "id, calculation_id, run_sequence, input_json, result_json, provenance_json, created_at",
-          )
-          .in("calculation_id", standaloneCalculationIds)
-          .order("created_at", { ascending: false })
-          .limit(200)
-      : { data: [], error: null };
-
-  if (standaloneRunError) {
-    throw new Error(`Unable to load calculation results: ${standaloneRunError.message}`);
+  const standaloneRunRows: Array<{
+    id: string;
+    calculation_id: string;
+    run_sequence: number;
+    input_json: unknown;
+    result_json: unknown;
+    provenance_json: unknown;
+    created_at: string;
+  }> = [];
+  if (standaloneCalculationIds.length) {
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await supabase
+        .from("calculation_runs")
+        .select(
+          "id, calculation_id, run_sequence, input_json, result_json, provenance_json, created_at",
+        )
+        .in("calculation_id", standaloneCalculationIds)
+        .order("run_sequence", { ascending: false })
+        .order("created_at", { ascending: false })
+        .range(offset, offset + 499);
+      if (error) {
+        throw new Error(`Unable to load calculation results: ${error.message}`);
+      }
+      standaloneRunRows.push(...(data ?? []));
+      if (!data || data.length < 500) break;
+    }
   }
 
   type StandaloneRun = {
@@ -164,7 +191,7 @@ export default async function ProjectPage({
     created_at: string;
   };
   const latestStandaloneRuns = new Map<string, StandaloneRun>();
-  for (const run of (standaloneRunRows ?? []) as StandaloneRun[]) {
+  for (const run of standaloneRunRows as StandaloneRun[]) {
     if (!latestStandaloneRuns.has(run.calculation_id)) {
       latestStandaloneRuns.set(run.calculation_id, run);
     }
@@ -394,7 +421,7 @@ export default async function ProjectPage({
   const calculationById = new Map(
     calculationRows.map((calculation) => [calculation.id, calculation]),
   );
-  const standaloneLinkRuns = ((standaloneRunRows ?? []) as StandaloneRun[]).flatMap((run) => {
+  const standaloneLinkRuns = (standaloneRunRows as StandaloneRun[]).flatMap((run) => {
     const calculation = calculationById.get(run.calculation_id);
     if (!calculation) return [];
     return [{
@@ -405,6 +432,9 @@ export default async function ProjectPage({
       runSequence: run.run_sequence,
       createdAt: run.created_at,
       result: run.result_json,
+      provenance: run.provenance_json,
+      input: run.input_json,
+      revisable: calculation.state !== "issued",
     }];
   });
   const workflowLinkRuns = (workflowStages ?? []).flatMap((stage) => {
@@ -418,6 +448,7 @@ export default async function ProjectPage({
       runSequence: run.run_sequence,
       createdAt: run.created_at,
       result: run.result_json,
+      provenance: run.provenance_json,
     }));
   });
   const linkSourceRuns = [...standaloneLinkRuns, ...workflowLinkRuns].sort(
@@ -473,22 +504,25 @@ export default async function ProjectPage({
 
         <details
           className={latestWorkflowId ? "new-assessment-disclosure" : ""}
-          open={!latestWorkflowId}
+          open={!latestWorkflowId || isWindWorkspaceCalculation(initialCalculationId)}
         >
           {latestWorkflowId ? <summary>Start another Wind assessment</summary> : null}
+          <WindCalculationWorkspace key={initialCalculationId ?? "wind"} projectId={project.id}
+            initialCalculationId={initialCalculationId} sourceRuns={linkSourceRuns}>
           <WindSiteWorkflow
             projectId={project.id}
             projectNumber={project.project_number}
             defaultAddress={project.address}
           />
+          </WindCalculationWorkspace>
         </details>
 
         <details
           className="project-calculation-disclosure"
           id="calculations"
-          open={Boolean(initialCalculationId)}
+          open={Boolean(initialCalculationId) && !isWindWorkspaceCalculation(initialCalculationId)}
         >
-          <summary>Add a standalone calculation</summary>
+          <summary>Advanced · individual calculation components and links</summary>
           <CalculationLauncher
             projectId={project.id}
             initialCalculationId={initialCalculationId}
@@ -520,6 +554,9 @@ export default async function ProjectPage({
                     </header>
                     {latestRun ? (
                       <>
+                        {freshness.get(calculation.id)?.stale ? <p className="revision-stale" role="status">
+                          Needs recalculation · {freshness.get(calculation.id)?.reasons.join(". ")}. The saved result still refers to its original source runs.
+                        </p> : <p className="revision-current">Saved source revisions are current</p>}
                         <dl className="calculation-result-values">
                           {resultEntries(latestRun.result_json).map(([key, value]) => (
                             <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{displayValue(value)}</dd></div>
