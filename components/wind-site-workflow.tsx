@@ -253,17 +253,17 @@ export function WindSiteWorkflow({
   return (
     <section
       className={workflow ? "wind-workflow-card has-results" : "wind-workflow-card"}
-      id="add-calculation"
     >
       <div className="wind-workflow-heading">
         <div>
           <p className="eyebrow">
             OpenWind · {windStandardLabel(workflow?.standard)}
           </p>
-          <h2>Site wind assessment</h2>
+          <h2>Wind calculation</h2>
           <p>
-            Start with the site and building. OpenCalcs runs the evidence workflow once,
-            then stores each engineering stage as a linked calculation.
+            Assess the site and building in one calculation, from wind region and
+            local conditions to directional design wind speeds. Each stage retains
+            its inputs, evidence and saved outputs for review and linking.
           </p>
         </div>
         <span className="workflow-badge" aria-live="polite">

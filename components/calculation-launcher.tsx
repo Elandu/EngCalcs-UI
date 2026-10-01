@@ -1,7 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { calculationDisplayName, calculationWorkspaceHref, FRAME_ANALYSIS_ID, WIND_ASSESSMENT_ID } from "@/lib/calculation-catalogue";
+import { runLinks } from "@/lib/calculation-revisions";
+import { resolveCalculationOutputSchema } from "@/lib/workflow-output-schema.mjs";
 
 type JsonSchema = {
   type?: string;
@@ -44,6 +48,9 @@ type LinkSourceRun = {
   runSequence: number;
   createdAt: string;
   result: unknown;
+  provenance?: unknown;
+  input?: unknown;
+  revisable?: boolean;
 };
 
 type LinkableOutput = {
@@ -75,6 +82,16 @@ type LinkedInputDraft = {
   previousValue: unknown;
 };
 
+type SavedRunSummary = {
+  calculationDefinitionId: string;
+  title: string;
+  runId: string;
+  runSequence?: number;
+  createdAt: string;
+  result: unknown;
+  linkedInputs?: Pick<LinkedInputDraft, "sourceRunId" | "sourceRunSequence" | "sourceTitle" | "sourceOutputPath" | "sourceOutputLabel" | "targetInputPath" | "targetInputLabel">[];
+};
+
 function labelFor(key: string) {
   return key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -93,6 +110,12 @@ function displayLinkedValue(value: unknown) {
   if (Array.isArray(value)) return "Array · " + value.length + " items";
   if (isJsonObject(value)) return "Object · " + Object.keys(value).length + " fields";
   return String(value);
+}
+
+function displayRunTimestamp(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
 }
 
 function enumValues(schema: JsonSchema): unknown[] | undefined {
@@ -176,7 +199,8 @@ function isPathWithinLinkedInput(path: string, linkedPaths: Set<string>) {
   );
 }
 
-function flattenOutputs(value: unknown, outputSchema?: JsonSchema): LinkableOutput[] {
+function flattenOutputs(value: unknown, outputSchema?: JsonSchema, definitionId?: string): LinkableOutput[] {
+  const sourceSchema = resolveCalculationOutputSchema(definitionId ?? "", outputSchema) as JsonSchema | undefined;
   const outputs: LinkableOutput[] = [];
   const visit = (current: unknown, path: string, label: string, depth: number) => {
     if (depth > 12 || outputs.length >= 250 || current === null || current === undefined) return;
@@ -187,29 +211,29 @@ function flattenOutputs(value: unknown, outputSchema?: JsonSchema): LinkableOutp
           path,
           label,
           value: quantity.value as string | number | boolean,
-          unit: quantity.unit || outputSchemaAtPointer(outputSchema, path)?.unit,
+          unit: quantity.unit || outputSchemaAtPointer(sourceSchema, path)?.unit,
         });
       }
       return;
     }
     if (["string", "number", "boolean"].includes(typeof current)) {
-      outputs.push({ path, label, value: current as string | number | boolean, unit: outputSchemaAtPointer(outputSchema, path)?.unit });
+      outputs.push({ path, label, value: current as string | number | boolean, unit: outputSchemaAtPointer(sourceSchema, path)?.unit });
       return;
     }
     if (Array.isArray(current)) {
-      if (path && outputSchemaAtPointer(outputSchema, path)?.type === "array") {
+      if (path && outputSchemaAtPointer(sourceSchema, path)?.type === "array") {
         outputs.push({
           path,
           label,
           value: current,
-          unit: outputSchemaAtPointer(outputSchema, path)?.unit,
+          unit: outputSchemaAtPointer(sourceSchema, path)?.unit,
         });
       }
       current.forEach((item, index) => visit(item, pointerPath(path, index), `${label} · ${index + 1}`, depth + 1));
       return;
     }
     const children = record(current);
-    if (path && Object.keys(children).length && outputSchemaAtPointer(outputSchema, path)?.type === "object") {
+    if (path && Object.keys(children).length && outputSchemaAtPointer(sourceSchema, path)?.type === "object") {
       outputs.push({ path, label, value: current });
     }
     for (const [key, child] of Object.entries(children)) {
@@ -577,12 +601,17 @@ export function CalculationLauncher({
   projectId,
   initialCalculationId,
   sourceRuns,
+  focusedCalculationId,
+  heading,
 }: {
   projectId: string;
   initialCalculationId?: string;
   sourceRuns: LinkSourceRun[];
+  focusedCalculationId?: string;
+  heading?: string;
 }) {
   const router = useRouter();
+  const outputHeadingId = useId();
   const [definitions, setDefinitions] = useState<CalculationDefinition[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [title, setTitle] = useState("");
@@ -594,6 +623,8 @@ export function CalculationLauncher({
   const [sourceOutputPath, setSourceOutputPath] = useState("");
   const [targetInputPath, setTargetInputPath] = useState("");
   const [linkedInputs, setLinkedInputs] = useState<LinkedInputDraft[]>([]);
+  const [submittedRun, setSubmittedRun] = useState<SavedRunSummary | null>(null);
+  const [revisionTarget, setRevisionTarget] = useState<{ calculationId: string; expectedRunId: string } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -601,12 +632,17 @@ export function CalculationLauncher({
       .then(async (response) => {
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "Unable to load calculation library.");
-        return payload as CalculationDefinition[];
+        if (!Array.isArray(payload)) throw new Error("The calculation library returned an invalid response.");
+        return (payload as CalculationDefinition[]).map((item) => ({
+          ...item, name: calculationDisplayName(item.id, item.name),
+        }));
       })
       .then((items) => {
         if (!active) return;
         setDefinitions(items);
-        const initial = items.find((item) => item.id === initialCalculationId) ?? items[0];
+        const initial = focusedCalculationId
+          ? items.find((item) => item.id === focusedCalculationId)
+          : items.find((item) => item.id === initialCalculationId) ?? items[0];
         if (initial) {
           setSelectedId(initial.id);
           setTitle(initial.name);
@@ -616,7 +652,7 @@ export function CalculationLauncher({
       .catch((error: Error) => { if (active) setMessage(error.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [initialCalculationId]);
+  }, [initialCalculationId, focusedCalculationId]);
 
   const selected = useMemo(() => definitions.find((item) => item.id === selectedId), [definitions, selectedId]);
   const selectedSourceRun = sourceRuns.find((run) => run.runId === sourceRunId) ?? sourceRuns[0];
@@ -625,6 +661,7 @@ export function CalculationLauncher({
       ? flattenOutputs(
           selectedSourceRun.result,
           definitions.find((definition) => definition.id === selectedSourceRun.calculationDefinitionId)?.output_schema,
+          selectedSourceRun.calculationDefinitionId,
         )
       : [],
     [definitions, selectedSourceRun],
@@ -642,6 +679,40 @@ export function CalculationLauncher({
     () => new Set(linkedInputs.map((link) => link.targetInputPath)),
     [linkedInputs],
   );
+  const savedRun = useMemo((): SavedRunSummary | undefined => {
+    if (!selected) return undefined;
+    if (submittedRun?.calculationDefinitionId === selected.id) {
+      const refreshedSubmittedRun = sourceRuns.find((run) => run.runId === submittedRun.runId);
+      return {
+        ...(refreshedSubmittedRun ?? submittedRun),
+        linkedInputs: submittedRun.linkedInputs,
+      };
+    }
+    const latest = revisionTarget
+      ? sourceRuns.find((run) => run.runId === revisionTarget.expectedRunId)
+      : sourceRuns.find((run) => run.calculationDefinitionId === selected.id);
+    if (!latest) return undefined;
+    const storedLinks = record(latest.provenance).linked_inputs;
+    const savedLinks = Array.isArray(storedLinks) ? storedLinks.flatMap((value) => {
+      const link = record(value);
+      if (typeof link.source_run_id !== "string" || typeof link.source_output_path !== "string" || typeof link.target_input_path !== "string") return [];
+      const source = sourceRuns.find((run) => run.runId === link.source_run_id);
+      return [{
+        sourceRunId: link.source_run_id,
+        sourceRunSequence: typeof link.source_run_sequence === "number" ? link.source_run_sequence : source?.runSequence ?? 0,
+        sourceTitle: source?.title ?? "Saved source calculation",
+        sourceOutputPath: link.source_output_path,
+        sourceOutputLabel: labelFor(link.source_output_path),
+        targetInputPath: link.target_input_path,
+        targetInputLabel: labelFor(link.target_input_path),
+      }];
+    }) : [];
+    return { ...latest, linkedInputs: savedLinks };
+  }, [selected, sourceRuns, submittedRun, revisionTarget]);
+  const savedOutputs = useMemo(
+    () => savedRun && selected ? flattenOutputs(savedRun.result, selected.output_schema, selected.id) : [],
+    [savedRun, selected],
+  );
 
   function selectDefinition(nextId: string) {
     const next = definitions.find((item) => item.id === nextId);
@@ -651,6 +722,65 @@ export function CalculationLauncher({
     setLinkedInputs([]);
     setTargetInputPath("");
     setMessage("");
+    setRevisionTarget(null);
+    setSubmittedRun(null);
+  }
+
+  function reviseRun(runId: string) {
+    const run = sourceRuns.find((item) => item.runId === runId && item.revisable);
+    if (!run) return;
+    const definition = definitions.find((item) => item.id === run.calculationDefinitionId);
+    if (!definition?.input_schema) return;
+    const inputs = record(run.input);
+    const stored = record(run.provenance).linked_inputs;
+    if (stored !== undefined && (!Array.isArray(stored) || runLinks(run.provenance).length !== stored.length)) {
+      setMessage("Saved dependency provenance is incomplete. Review the saved run before creating a revision.");
+      return;
+    }
+    const storedLinks = Array.isArray(stored) ? stored.map(record) : [];
+    setSelectedId(definition.id);
+    setTitle(run.title);
+    setValues(structuredClone(inputs));
+    setRevisionTarget({ calculationId: run.calculationId, expectedRunId: run.runId });
+    setSubmittedRun(null);
+    setLinkedInputs(runLinks(run.provenance).map((link) => {
+      const source = sourceRuns.find((item) => item.runId === link.source_run_id);
+      const snapshot = storedLinks.find((item) => item.target_input_path === link.target_input_path);
+      return {
+        sourceCalculationId: link.source_calculation_id, sourceRunId: link.source_run_id,
+        sourceRunSequence: source?.runSequence ?? 0, sourceTitle: source?.title ?? "Saved source",
+        sourceOutputPath: link.source_output_path, sourceOutputLabel: labelFor(link.source_output_path),
+        targetInputPath: link.target_input_path, targetInputLabel: labelFor(link.target_input_path),
+        sourceUnit: typeof snapshot?.source_unit === "string" ? snapshot.source_unit : undefined,
+        targetUnit: typeof snapshot?.target_unit === "string" ? snapshot.target_unit : undefined,
+        value: snapshot?.source_value, previousValue: snapshot?.source_value,
+      };
+    }));
+    setMessage(`Editing ${run.title} from run ${run.runSequence}. Saving creates a new revision; earlier runs remain unchanged.`);
+  }
+
+  function refreshLinkedSources() {
+    try {
+      let nextValues = values;
+      const nextLinks = linkedInputs.map((link) => {
+        const latest = sourceRuns.filter((run) => run.calculationId === link.sourceCalculationId)
+          .sort((a, b) => b.runSequence - a.runSequence)[0];
+        if (!latest) throw new Error("A linked source is unavailable. Reload the project before continuing.");
+        const definition = definitions.find((item) => item.id === latest.calculationDefinitionId);
+        const output = flattenOutputs(latest.result, definition?.output_schema, latest.calculationDefinitionId).find((item) => item.path === link.sourceOutputPath);
+        const input = targetInputs.find((item) => item.path === link.targetInputPath);
+        if (!output || !input) throw new Error("A linked field is no longer available. Review the link explicitly.");
+        const error = linkedValueError(output, input);
+        if (error) throw new Error(error);
+        nextValues = setPointerValue(nextValues, link.targetInputPath, output.value);
+        return { ...link, sourceRunId: latest.runId, sourceRunSequence: latest.runSequence, value: output.value };
+      });
+      setValues(nextValues);
+      setLinkedInputs(nextLinks);
+      setMessage("Latest accessible source runs selected. Review the updated values, then save a new revision.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to refresh linked sources.");
+    }
   }
 
   function addLinkedInput() {
@@ -716,6 +846,7 @@ export function CalculationLauncher({
           projectId,
           title,
           inputs,
+          ...(revisionTarget ? { revisionCalculationId: revisionTarget.calculationId, expectedRunId: revisionTarget.expectedRunId } : {}),
           linkedInputs: linkedInputs.map((link) => ({
             sourceCalculationId: link.sourceCalculationId,
             sourceRunId: link.sourceRunId,
@@ -726,6 +857,17 @@ export function CalculationLauncher({
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Calculation failed.");
+      setSubmittedRun({
+        calculationDefinitionId: selected.id,
+        title,
+        runId: typeof payload.runId === "string" ? payload.runId : "",
+        createdAt: typeof payload.createdAt === "string" ? payload.createdAt : new Date().toISOString(),
+        result: payload.result ?? payload,
+        linkedInputs: linkedInputs.slice(),
+      });
+      if (revisionTarget && typeof payload.runId === "string") {
+        setRevisionTarget({ ...revisionTarget, expectedRunId: payload.runId });
+      }
       setMessage(linkedInputs.length
         ? `Calculation run saved with ${linkedInputs.length} linked input${linkedInputs.length === 1 ? "" : "s"}.`
         : "Calculation run saved.");
@@ -738,136 +880,216 @@ export function CalculationLauncher({
   }
 
   if (loading) return <div className="calculator-launcher">Loading calculation library…</div>;
+  const headingId = `calculation-title-${focusedCalculationId ?? "advanced"}`;
 
   return (
-    <section className="calculator-launcher" aria-labelledby="project-calculation-title">
+    <section className="calculator-launcher" aria-labelledby={headingId}>
       <div className="launcher-heading">
         <div>
-          <p className="eyebrow">Add calculation</p>
-          <h2 id="project-calculation-title">Project calculation</h2>
-          <p>Enter structured inputs, then save a versioned run and its engineering output to this project.</p>
+          <p className="eyebrow">{focusedCalculationId ? "Wind calculation" : "Advanced calculations"}</p>
+          <h2 id={headingId}>{heading ?? "Calculation components & links"}</h2>
+          {focusedCalculationId ? <p>{selected?.description ?? "This calculation requires the corresponding backend release before it can run."}</p> :
+            <p>Run an individual component or link saved outputs into its inputs. For a complete wind assessment, <Link href={calculationWorkspaceHref(WIND_ASSESSMENT_ID, projectId)}>open Wind calculation</Link>.</p>}
         </div>
       </div>
 
-      {!definitions.length ? (
-        <p className="form-message">{message || "No calculations are available."}</p>
+      {!definitions.length || (focusedCalculationId && !selected) ? (
+        <p className="form-message">{message || (focusedCalculationId ? "This calculation is not available from the connected engine yet." : "No calculations are available.")}</p>
       ) : (
         <form className="calculator-form" onSubmit={run}>
-          <label>
-            Calculation
-            <select value={selectedId} onChange={(event) => selectDefinition(event.target.value)}>
-              {definitions.map((definition) => <option key={definition.id} value={definition.id}>{definition.name}</option>)}
-            </select>
-          </label>
+          <fieldset className="calculation-form-fields" disabled={busy}>
+          <div className="calculation-workbench">
+            <div className="calculation-input-pane">
+              <label>Revise a saved calculation
+                <select value={revisionTarget?.calculationId ?? ""} disabled={busy} onChange={(event) => {
+                  const latest = sourceRuns.filter((run) => run.calculationId === event.target.value)
+                    .sort((a, b) => b.runSequence - a.runSequence)[0];
+                  if (latest) reviseRun(latest.runId); else selectDefinition(selectedId);
+                }}>
+                  <option value="">New calculation</option>
+                  {sourceRuns.filter((run, index) => run.revisable && (!focusedCalculationId || run.calculationDefinitionId === focusedCalculationId) && sourceRuns.findIndex((other) => other.calculationId === run.calculationId) === index)
+                    .map((run) => <option key={run.calculationId} value={run.calculationId}>{run.title} · Run {run.runSequence}</option>)}
+                </select>
+              </label>
+              {!focusedCalculationId ? <label>
+                Calculation
+                <select value={selectedId} onChange={(event) => selectDefinition(event.target.value)}>
+                  {definitions.map((definition) => <option key={definition.id} value={definition.id}>{definition.name}</option>)}
+                </select>
+              </label> : null}
 
-          {selected ? (
-            <div className="definition-note">
-              <strong>{selected.standard?.name || "Engineering calculation"}</strong>
-              <span>{selected.standard?.edition ? ` · ${selected.standard.edition}` : ""}</span>
-              <p>{selected.description}</p>
-            </div>
-          ) : null}
+              {selected?.id === FRAME_ANALYSIS_ID ? <p className="form-message"><Link href={calculationWorkspaceHref(FRAME_ANALYSIS_ID, projectId)}>Open Frame analysis</Link> to edit the model visually and review force and deflection diagrams.</p> : null}
 
-          <label>
-            Calculation title
-            <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required />
-          </label>
+              {selected ? (
+                <div className="definition-note">
+                  <strong>{selected.standard?.name || "Engineering calculation"}</strong>
+                  <span>{selected.standard?.edition ? ` · ${selected.standard.edition}` : ""}</span>
+                  <p>{selected.description}</p>
+                </div>
+              ) : null}
 
-          <div className="schema-input-grid">
-            {Object.entries(selected?.input_schema?.properties ?? {}).map(([key, schema]) => (
-              <SchemaField
-                key={key}
-                name={key}
-                schema={schema}
-                value={values[key]}
-                required={selected?.input_schema?.required?.includes(key) ?? false}
-                path={pointerPath("", key)}
-                linkedPaths={linkedPaths}
-                onChange={(value) => setValues((current) => ({ ...current, [key]: value }))}
-              />
-            ))}
-          </div>
+              <label>
+                Calculation title
+                <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required />
+              </label>
 
-          <section className="calculation-link-builder" aria-labelledby="calculation-link-title">
-            <div className="calculation-link-builder-heading">
-              <div>
-                <p className="eyebrow">Project data</p>
-                <h3 id="calculation-link-title">Link a saved result</h3>
-                <p>Choose an exact source run and map one of its outputs into this calculation.</p>
-              </div>
-              <span>{linkedInputs.length} linked</span>
-            </div>
-            {sourceRuns.length ? (
-              <div className="calculation-link-builder-controls">
-                <label>
-                  Source run
-                  <select value={selectedSourceRun?.runId ?? ""} onChange={(event) => { setSourceRunId(event.target.value); setSourceOutputPath(""); }}>
-                    {sourceRuns.map((run) => (
-                      <option key={run.runId} value={run.runId}>
-                        {run.title} · Run {run.runSequence} · {run.createdAt.slice(0, 10)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Source output
-                  <select value={sourceOutputPath} onChange={(event) => setSourceOutputPath(event.target.value)}>
-                    <option value="">Select an output…</option>
-                    {sourceOutputs.map((output) => (
-                      <option key={output.path} value={output.path}>
-                        {output.label} = {displayLinkedValue(output.value)}{output.unit ? ` ${output.unit}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Target input
-                  <select value={targetInputPath} onChange={(event) => setTargetInputPath(event.target.value)}>
-                    <option value="">Select an input…</option>
-                    {targetInputs.filter((input) => !linkedInputs.some((link) => pointerPathsOverlap(link.targetInputPath, input.path))).map((input) => (
-                      <option key={input.path} value={input.path}>
-                        {input.label}{input.schema.unit ? ` · ${input.schema.unit}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button className="button button-secondary" type="button" onClick={addLinkedInput} disabled={!selectedOutput || !selectedTarget || Boolean(linkError)}>
-                  Link value
-                </button>
-                {linkError ? <p className="calculation-link-error" role="status">{linkError}</p> : null}
-                {!sourceOutputs.length ? <p className="library-muted">This source run has no supported outputs to link.</p> : null}
-                {!targetInputs.length ? <p className="library-muted">This calculation has no supported scalar, object, or array inputs to link.</p> : null}
-              </div>
-            ) : (
-              <p className="calculation-links-empty">Run a project calculation first; its saved outputs will be available here as exact-run sources.</p>
-            )}
-            {linkedInputs.length ? (
-              <ul className="calculation-link-draft-list">
-                {linkedInputs.map((link) => (
-                  <li key={`${link.sourceRunId}:${link.sourceOutputPath}:${link.targetInputPath}`}>
-                    <div>
-                      <strong>{link.sourceOutputLabel}</strong>
-                      <small>{link.sourceTitle} · Run {link.sourceRunSequence} · {displayLinkedValue(link.value)}{link.sourceUnit ? ` ${link.sourceUnit}` : ""}</small>
-                    </div>
-                    <span aria-hidden="true">→</span>
-                    <div>
-                      <strong>{link.targetInputLabel}</strong>
-                      <small>{link.targetUnit || "Unitless input"}</small>
-                    </div>
-                    <button type="button" className="schema-remove-row" onClick={() => removeLinkedInput(link)}>Remove link</button>
-                  </li>
+              <div className="schema-input-grid">
+                {Object.entries(selected?.input_schema?.properties ?? {}).map(([key, schema]) => (
+                  <SchemaField
+                    key={key}
+                    name={key}
+                    schema={schema}
+                    value={values[key]}
+                    required={selected?.input_schema?.required?.includes(key) ?? false}
+                    path={pointerPath("", key)}
+                    linkedPaths={linkedPaths}
+                    onChange={(value) => setValues((current) => ({ ...current, [key]: value }))}
+                  />
                 ))}
-              </ul>
-            ) : null}
-            <p className="calculation-link-note">The selected source run is immutable. The server resolves it again, validates structured values and units, and records the exact run provenance. No unit conversion is implicit.</p>
-          </section>
+              </div>
 
-          <div className="form-actions">
-            <button className="button button-primary" type="submit" disabled={busy || !selected?.input_schema}>
-              {busy ? "Running…" : "Run & save"}
-            </button>
+              <section className="calculation-link-builder" aria-labelledby="calculation-link-title">
+                {revisionTarget && linkedInputs.length ? <button type="button" className="button button-secondary" disabled={busy} onClick={refreshLinkedSources}>Use latest source runs</button> : null}
+                <div className="calculation-link-builder-heading">
+                  <div>
+                    <p className="eyebrow">Project data</p>
+                    <h3 id="calculation-link-title">Link a saved result</h3>
+                    <p>Choose an exact source run and map one of its outputs into this calculation.</p>
+                  </div>
+                  <span>{linkedInputs.length} linked</span>
+                </div>
+                {sourceRuns.length ? (
+                  <div className="calculation-link-builder-controls">
+                    <label>
+                      Source run
+                      <select value={selectedSourceRun?.runId ?? ""} onChange={(event) => { setSourceRunId(event.target.value); setSourceOutputPath(""); }}>
+                        {sourceRuns.map((run) => (
+                          <option key={run.runId} value={run.runId}>
+                            {run.title} · Run {run.runSequence} · {run.createdAt.slice(0, 10)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Source output
+                      <select value={sourceOutputPath} onChange={(event) => setSourceOutputPath(event.target.value)}>
+                        <option value="">Select an output…</option>
+                        {sourceOutputs.map((output) => (
+                          <option key={output.path} value={output.path}>
+                            {output.label} = {displayLinkedValue(output.value)}{output.unit ? ` ${output.unit}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Target input
+                      <select value={targetInputPath} onChange={(event) => setTargetInputPath(event.target.value)}>
+                        <option value="">Select an input…</option>
+                        {targetInputs.filter((input) => !linkedInputs.some((link) => pointerPathsOverlap(link.targetInputPath, input.path))).map((input) => (
+                          <option key={input.path} value={input.path}>
+                            {input.label}{input.schema.unit ? ` · ${input.schema.unit}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button className="button button-secondary" type="button" onClick={addLinkedInput} disabled={!selectedOutput || !selectedTarget || Boolean(linkError)}>
+                      Link value
+                    </button>
+                    {linkError ? <p className="calculation-link-error" role="status">{linkError}</p> : null}
+                    {!sourceOutputs.length ? <p className="library-muted">This source run has no supported outputs to link.</p> : null}
+                    {!targetInputs.length ? <p className="library-muted">This calculation has no supported scalar, object, or array inputs to link.</p> : null}
+                  </div>
+                ) : (
+                  <p className="calculation-links-empty">Run a project calculation first; its saved outputs will be available here as exact-run sources.</p>
+                )}
+                {linkedInputs.length ? (
+                  <ul className="calculation-link-draft-list">
+                    {linkedInputs.map((link) => (
+                      <li key={`${link.sourceRunId}:${link.sourceOutputPath}:${link.targetInputPath}`}>
+                        <div>
+                          <strong>{link.sourceOutputLabel}</strong>
+                          <small>{link.sourceTitle} · Run {link.sourceRunSequence} · {displayLinkedValue(link.value)}{link.sourceUnit ? ` ${link.sourceUnit}` : ""}</small>
+                        </div>
+                        <span aria-hidden="true">→</span>
+                        <div>
+                          <strong>{link.targetInputLabel}</strong>
+                          <small>{link.targetUnit || "Unitless input"}</small>
+                        </div>
+                        <button type="button" className="schema-remove-row" onClick={() => removeLinkedInput(link)}>Remove link</button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <p className="calculation-link-note">The selected source run is immutable. The server resolves it again, validates structured values and units, and records the exact run provenance. No unit conversion is implicit.</p>
+              </section>
+
+              <div className="form-actions">
+                <button className="button button-primary" type="submit" disabled={busy || !selected?.input_schema}>
+                  {busy ? "Running…" : revisionTarget ? "Run & save new revision" : "Run & save"}
+                </button>
+              </div>
+              {message ? <p className="form-message" role="status" aria-live="polite">{message}</p> : null}
+            </div>
+
+            <aside className="calculation-output-pane" aria-labelledby={outputHeadingId} aria-live="polite">
+              <div className="calculation-output-heading">
+                <div>
+                  <p className="eyebrow">Saved output</p>
+                  <h3 id={outputHeadingId}>Latest run</h3>
+                </div>
+                <span className={savedRun ? "calculation-output-status is-saved" : "calculation-output-status"}>
+                  {savedRun ? "Saved" : "Waiting"}
+                </span>
+              </div>
+              {savedRun ? (
+                <>
+                  <p className="calculation-output-run-title">{savedRun.title}</p>
+                  <div className="calculation-output-run-meta">
+                    <span>{savedRun.runSequence ? `Run ${savedRun.runSequence}` : "Latest saved run"}</span>
+                    <time dateTime={savedRun.createdAt}>
+                      {displayRunTimestamp(savedRun.createdAt)}
+                    </time>
+                  </div>
+                  <code className="calculation-output-run-id" title={savedRun.runId}>Run ID · {savedRun.runId || "Available in run history"}</code>
+                  {savedOutputs.length ? (
+                    <dl className="calculation-output-values">
+                      {savedOutputs.slice(0, 8).map((output) => (
+                        <div key={output.path}>
+                          <dt>{output.label}</dt>
+                          <dd>{displayLinkedValue(output.value)}{output.unit ? ` ${output.unit}` : ""}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="calculation-output-empty">This run has no schema-matched outputs to summarize. Open its full run record below for the complete response.</p>
+                  )}
+                  {savedOutputs.length > 8 ? <p className="calculation-output-note">Showing 8 of {savedOutputs.length} outputs. The full result is in the run record below.</p> : null}
+                  {savedRun.linkedInputs?.length ? (
+                    <div className="calculation-output-links">
+                      <strong>Inputs linked in this run</strong>
+                      <ul>
+                        {savedRun.linkedInputs.map((link) => (
+                          <li key={`${link.sourceRunId}:${link.targetInputPath}`}>
+                            <span>{link.sourceOutputLabel}</span>
+                            <span aria-hidden="true">→</span>
+                            <span>{link.targetInputLabel}</span>
+                            <small>{link.sourceTitle} · {link.sourceRunSequence ? `Run ${link.sourceRunSequence}` : "Saved run"} · {link.sourceOutputPath} → {link.targetInputPath}<br />Source run · {link.sourceRunId}</small>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="calculation-output-empty-state">
+                  <span aria-hidden="true">↗</span>
+                  <p>Run this calculation to review its saved outputs beside the inputs.</p>
+                  <small>Saved results remain available in the project run history.</small>
+                </div>
+              )}
+            </aside>
           </div>
-          {message ? <p className="form-message" role="status" aria-live="polite">{message}</p> : null}
+          </fieldset>
         </form>
       )}
     </section>

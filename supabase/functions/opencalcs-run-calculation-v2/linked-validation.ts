@@ -15,6 +15,30 @@ export function pointerPathsOverlap(left: string, right: string): boolean {
   return left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
 }
 
+// A declared wind source must agree with the exact runs resolved by the host.
+// Unlinked requests retain caller-supplied references; they are not verified links.
+export function windSourceLinkError(
+  definitionId: string,
+  inputs: Record<string, unknown>,
+  appliedLinks: Record<string, unknown>[],
+): string | null {
+  if (definitionId !== "au.wind.frame_loads" || !Array.isArray(inputs.pressure_cases)) return null;
+  for (const [index, pressureCase] of inputs.pressure_cases.entries()) {
+    const paths = ["vdes_external_mps", "vdes_internal_mps"].map((field) => `/pressure_cases/${index}/${field}`);
+    const relevant = appliedLinks.filter((link) => typeof link.target_input_path === "string" &&
+      paths.some((path) => pointerPathsOverlap(path, link.target_input_path as string)));
+    if (!relevant.length) continue;
+    if (!isObject(pressureCase) || relevant.length !== 2 ||
+      !paths.every((path) => relevant.some((link) => link.target_input_path === path))) {
+      return `Pressure case ${index + 1}: link both external and internal design speeds individually to the same saved wind run.`;
+    }
+    if (relevant.some((link) => link.source_run_id !== pressureCase.source_run_id)) {
+      return `Pressure case ${index + 1}: source_run_id must match both linked design-speed source runs. Review the selected run and declared source.`;
+    }
+  }
+  return null;
+}
+
 function scalarMatchesSchema(value: unknown, schema: JsonSchema): boolean {
   if (Object.hasOwn(schema, "const") && !Object.is(value, schema.const)) {
     return false;

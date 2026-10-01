@@ -1,6 +1,7 @@
 export type CalculationRunnerFunction =
   | "opencalcs-run-calculation"
-  | "opencalcs-run-calculation-v2";
+  | "opencalcs-run-calculation-v2"
+  | "opencalcs-run-calculation-v3";
 
 export type CalculationRunFailure = {
   message: string;
@@ -26,7 +27,9 @@ function statusFromError(error: unknown): number | undefined {
 
 export function calculationRunnerFunction(
   hasLinkedInputs: boolean,
+  revision = false,
 ): CalculationRunnerFunction {
+  if (revision) return "opencalcs-run-calculation-v3";
   return hasLinkedInputs
     ? "opencalcs-run-calculation-v2"
     : "opencalcs-run-calculation";
@@ -36,22 +39,24 @@ export function calculationRunFailure(
   error: unknown,
   data: unknown,
   hasLinkedInputs: boolean,
+  revision = false,
 ): CalculationRunFailure | null {
   const errorMessage = record(error)?.message;
   const dataMessage = record(data)?.error;
   if (!error && !dataMessage) return null;
 
-  const missingLinkedRunner = hasLinkedInputs && statusFromError(error) === 404;
-  const message = missingLinkedRunner
-    ? LINKED_RUNNER_MISSING_MESSAGE
-    : typeof errorMessage === "string" && errorMessage
-    ? errorMessage
+  const status = statusFromError(error);
+  const missingRunner = (hasLinkedInputs || revision) && status === 404;
+  const message = missingRunner
+    ? revision ? "Calculation revision support is not deployed yet. No revision was saved." : LINKED_RUNNER_MISSING_MESSAGE
     : typeof dataMessage === "string" && dataMessage
     ? dataMessage
+    : typeof errorMessage === "string" && errorMessage
+    ? errorMessage
     : "Calculation failed.";
 
   return {
     message,
-    status: missingLinkedRunner ? 503 : 422,
+    status: missingRunner ? 503 : status ?? 422,
   };
 }

@@ -4,7 +4,26 @@ import {
   isSupportedLinkValue,
   matchesSchema,
   pointerPathsOverlap,
+  windSourceLinkError,
 } from "./linked-validation.ts";
+
+test("wind source references agree with both individually resolved design-speed links", () => {
+  const definition = "au.wind.frame_loads";
+  const inputs = { pressure_cases: [{ source_run_id: "run-a" }] };
+  const links = ["vdes_external_mps", "vdes_internal_mps"].map((field) => ({
+    source_run_id: "run-a", target_input_path: `/pressure_cases/0/${field}`,
+  }));
+  assert.equal(windSourceLinkError(definition, inputs, links), null);
+  assert.match(windSourceLinkError(definition, { pressure_cases: [{ source_run_id: "run-b" }] }, links), /must match/);
+  assert.match(windSourceLinkError(definition, inputs, [links[0], { ...links[1], source_run_id: "run-b" }]), /must match/);
+  assert.match(windSourceLinkError(definition, inputs, links.slice(0, 1)), /both external and internal/);
+  assert.match(windSourceLinkError(definition, inputs, [{ source_run_id: "run-a", target_input_path: "/pressure_cases" }]), /individually/);
+  assert.equal(windSourceLinkError(definition, inputs, []), null, "manual references remain caller assertions");
+  assert.equal(windSourceLinkError("other.method", inputs, links.slice(0, 1)), null);
+  const twoCases = { pressure_cases: [{ source_run_id: "run-a" }, { source_run_id: "run-b" }] };
+  const otherLinks = links.map((link) => ({ ...link, target_input_path: link.target_input_path.replace("/0/", "/1/") }));
+  assert.match(windSourceLinkError(definition, twoCases, [...links, ...otherLinks]), /case 2/);
+});
 
 test("supports complete array values for structured links", () => {
   assert.equal(isSupportedLinkValue([]), true);
