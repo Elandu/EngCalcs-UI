@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { calculationCatalogue, calculationWorkspaceHref, WIND_ASSESSMENT_ID, type CatalogueDefinition as Definition } from "@/lib/calculation-catalogue";
+import { calculationCatalogue, calculationGuide, calculationWorkspaceHref, WIND_ASSESSMENT_ID, type CatalogueDefinition as Definition } from "@/lib/calculation-catalogue";
 
 type Project = { id: string; name: string; project_number: string | null; address: string | null };
 
@@ -73,6 +73,7 @@ export function CalculationLibrary({
     );
   }, [category, definitions, query]);
   const selected = filtered.find((item) => item.id === selectedId) ?? filtered[0];
+  const guide = calculationGuide(selected?.id);
 
   function useCalculation() {
     if (!selected || !projectId) return;
@@ -155,8 +156,8 @@ export function CalculationLibrary({
               <button className={`library-card${item.id === selected?.id ? " selected" : ""}`} key={item.id} type="button" onClick={() => setSelectedId(item.id)} aria-pressed={item.id === selected?.id}>
                 <span className="library-card-category">{titleCase(item.category || "Engineering")}</span>
                 <strong>{item.name}</strong>
-                <span>{item.description}</span>
-                <small>{item.standard?.name || "Engineering calculation"}{item.standard?.edition ? ` · ${item.standard.edition}` : ""}</small>
+                <span>{calculationGuide(item.id)?.summary ?? item.description}</span>
+                <small>{calculationGuide(item.id)?.scope ?? <>{item.standard?.name || "Engineering calculation"}{item.standard?.edition ? ` · ${item.standard.edition}` : ""}</>}</small>
               </button>
             )) : <div className="project-list-empty"><h2>No matches</h2><p>Try another search term or category.</p></div>}
           </div>
@@ -165,7 +166,22 @@ export function CalculationLibrary({
             {selected ? <>
               <p className="eyebrow">Calculation details</p>
               <h2>{selected.name}</h2>
-              <p>{selected.description}</p>
+              <p>{guide?.summary ?? selected.description}</p>
+              {guide ? (
+                <div className="library-guide">
+                  <span className="library-scope-badge">{guide.scope}</span>
+                  <div className="library-guide-columns">
+                    <div><h3>You&apos;ll need</h3><ul>{guide.needs.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                    <div><h3>You get</h3><ul>{guide.gives.map((item) => <li key={item}>{item}</li>)}</ul></div>
+                  </div>
+                  <p className="library-muted">{guide.limits}</p>
+                  <button className="button button-primary library-use-button" type="button" onClick={useCalculation} disabled={!projectId}>
+                    {projectId ? `Open ${guide.title}` : "Choose a project to open"} <span aria-hidden="true">→</span>
+                  </button>
+                </div>
+              ) : null}
+              <details className="library-tech-details" open={!guide}>
+                <summary>Engine and version details</summary>
               <dl>
                 {selected.id === WIND_ASSESSMENT_ID ? (
                   <div><dt>Assessment</dt><dd>Combined wind calculation · six linked stages</dd></div>
@@ -180,9 +196,10 @@ export function CalculationLibrary({
                 <div><dt>Runtime</dt><dd>{[selected.runtime?.name, selected.runtime?.version ? `v${selected.runtime.version}` : ""].filter(Boolean).join(" · ") || "Not reported"}</dd></div>
                 <div><dt>Runtime revision</dt><dd><code>{reportedRevision(selected.runtime?.revision)}</code></dd></div>
               </dl>
+              </details>
               {selected.id === WIND_ASSESSMENT_ID ? <p className="library-muted">Includes site, wind region, terrain, shielding, topography and design wind speed. Each stage keeps its saved inputs, results and review history, and its outputs can feed linked calculations.</p> : null}
-              <h3>Inputs</h3>
-              {Object.entries(selected.input_schema?.properties ?? {}).length ? (
+              {guide ? null : <h3>Inputs</h3>}
+              {guide ? null : Object.entries(selected.input_schema?.properties ?? {}).length ? (
                 <ul className="library-input-list">
                   {Object.entries(selected.input_schema?.properties ?? {}).map(([key, schema]) => (
                     <li key={key}>
@@ -193,9 +210,9 @@ export function CalculationLibrary({
                   ))}
                 </ul>
               ) : <p className="library-muted">Input details are supplied when the calculation is added.</p>}
-              <button className="button button-primary library-use-button" type="button" onClick={useCalculation} disabled={!projectId}>
-                Use in project <span aria-hidden="true">→</span>
-              </button>
+              {guide ? null : <button className="button button-primary library-use-button" type="button" onClick={useCalculation} disabled={!projectId}>
+                {projectId ? "Use in project" : "Choose a project to continue"} <span aria-hidden="true">→</span>
+              </button>}
               {!projects.length ? (
                 <p className="library-muted">
                   {hasWorkspaceMembership

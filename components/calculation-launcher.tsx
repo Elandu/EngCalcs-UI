@@ -1,9 +1,23 @@
 "use client";
 
-import { FormEvent, useEffect, useId, useMemo, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { calculationDisplayName, calculationWorkspaceHref, FRAME_ANALYSIS_ID, WIND_ASSESSMENT_ID } from "@/lib/calculation-catalogue";
+import { AS3600_SECTION_ID, AS4100_SECTION_ID, calculationDisplayName, calculationGuide, calculationWorkspaceHref, FRAME_ANALYSIS_ID, WIND_ASSESSMENT_ID } from "@/lib/calculation-catalogue";
+import { useLivePreview } from "@/lib/use-live-preview";
+import {
+  CheckChips,
+  concreteChips,
+  steelChips,
+  ConcreteSectionEditor,
+  ConcreteSectionResults,
+  parseConcreteSectionResult,
+  parseSteelAxialResult,
+  SteelAxialEditor,
+  SteelAxialResults,
+  type ConcreteSectionResult,
+  type SteelAxialResult,
+} from "@/components/structural-section-editors";
 import { runLinks } from "@/lib/calculation-revisions";
 import { resolveCalculationOutputSchema } from "@/lib/workflow-output-schema.mjs";
 
@@ -39,6 +53,36 @@ type CalculationDefinition = {
 };
 
 type SchemaRecord = Record<string, unknown>;
+
+type StructuralResult = { kind: "concrete"; value: ConcreteSectionResult } | { kind: "steel"; value: SteelAxialResult };
+
+function parseStructuralResult(value: unknown): StructuralResult | null {
+  const concrete = parseConcreteSectionResult(value);
+  if (concrete) return { kind: "concrete", value: concrete };
+  const steel = parseSteelAxialResult(value);
+  return steel ? { kind: "steel", value: steel } : null;
+}
+
+function isSectionCalculation(id?: string) {
+  return id === AS3600_SECTION_ID || id === AS4100_SECTION_ID;
+}
+
+type Draft = { title: string; values: SchemaRecord };
+
+function draftKey(projectId: string, calculationId: string) {
+  return `opencalcs:calc-draft:${projectId}:${calculationId}`;
+}
+
+/** Unsaved section-editor inputs kept in this browser so a reload or navigation does not lose work. */
+function loadDraft(projectId: string, calculationId: string): Draft | null {
+  if (!isSectionCalculation(calculationId)) return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(draftKey(projectId, calculationId)) ?? "null");
+    return parsed && typeof parsed.title === "string" && isJsonObject(parsed.values) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 type LinkSourceRun = {
   calculationId: string;
@@ -602,16 +646,20 @@ export function CalculationLauncher({
   initialCalculationId,
   sourceRuns,
   focusedCalculationId,
+  initialRevisionCalculationId,
   heading,
 }: {
   projectId: string;
   initialCalculationId?: string;
   sourceRuns: LinkSourceRun[];
   focusedCalculationId?: string;
+  /** Saved calculation to open for revision once definitions load (from the project tree). */
+  initialRevisionCalculationId?: string;
   heading?: string;
 }) {
   const router = useRouter();
   const outputHeadingId = useId();
+  const formId = useId();
   const [definitions, setDefinitions] = useState<CalculationDefinition[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [title, setTitle] = useState("");
@@ -625,6 +673,8 @@ export function CalculationLauncher({
   const [linkedInputs, setLinkedInputs] = useState<LinkedInputDraft[]>([]);
   const [submittedRun, setSubmittedRun] = useState<SavedRunSummary | null>(null);
   const [revisionTarget, setRevisionTarget] = useState<{ calculationId: string; expectedRunId: string } | null>(null);
+  const [livePreviewEnabled, setLivePreviewEnabled] = useState(true);
+  const openedRevision = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -644,17 +694,35 @@ export function CalculationLauncher({
           ? items.find((item) => item.id === focusedCalculationId)
           : items.find((item) => item.id === initialCalculationId) ?? items[0];
         if (initial) {
+          const draft = loadDraft(projectId, initial.id);
           setSelectedId(initial.id);
-          setTitle(initial.name);
-          setValues(makeInputValues(initial.input_schema));
+          setTitle(draft?.title ?? initial.name);
+          setValues(draft?.values ?? makeInputValues(initial.input_schema));
+          if (draft) setMessage("Restored your unsaved inputs from this browser.");
         }
       })
       .catch((error: Error) => { if (active) setMessage(error.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [initialCalculationId, focusedCalculationId]);
+  }, [initialCalculationId, focusedCalculationId, projectId]);
+
+  useEffect(() => {
+    if (!selectedId || !isSectionCalculation(selectedId) || revisionTarget || loading) return;
+    const timer = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(draftKey(projectId, selectedId), JSON.stringify({ title, values }));
+      } catch {
+        // Storage can be full or blocked; the form keeps working without a draft.
+      }
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [loading, projectId, revisionTarget, selectedId, title, values]);
 
   const selected = useMemo(() => definitions.find((item) => item.id === selectedId), [definitions, selectedId]);
+  const guide = calculationGuide(selected?.id);
+  const revisableRuns = sourceRuns.filter((run, index) => run.revisable &&
+    (!focusedCalculationId || run.calculationDefinitionId === focusedCalculationId) &&
+    sourceRuns.findIndex((other) => other.calculationId === run.calculationId) === index);
   const selectedSourceRun = sourceRuns.find((run) => run.runId === sourceRunId) ?? sourceRuns[0];
   const sourceOutputs = useMemo(
     () => selectedSourceRun
@@ -709,6 +777,23 @@ export function CalculationLauncher({
     }) : [];
     return { ...latest, linkedInputs: savedLinks };
   }, [selected, sourceRuns, submittedRun, revisionTarget]);
+  const sectionInputs = useMemo((): { inputs: SchemaRecord | null; error: string } => {
+    if (!selected?.input_schema || !isSectionCalculation(selected.id)) return { inputs: null, error: "" };
+    try {
+      return { inputs: serializeInputs(selected.input_schema, values), error: "" };
+    } catch (error) {
+      return { inputs: null, error: error instanceof Error ? error.message : "Check the calculation inputs." };
+    }
+  }, [selected, values]);
+  const preview = useLivePreview(selected?.id ?? "", sectionInputs.inputs, {
+    enabled: livePreviewEnabled && Boolean(sectionInputs.inputs),
+    parse: parseStructuralResult,
+  });
+  const savedStructuralResult = useMemo(
+    () => savedRun && isSectionCalculation(selected?.id) ? parseStructuralResult(savedRun.result) : null,
+    [savedRun, selected],
+  );
+  const shownStructuralResult = preview.result ?? savedStructuralResult;
   const savedOutputs = useMemo(
     () => savedRun && selected ? flattenOutputs(savedRun.result, selected.output_schema, selected.id) : [],
     [savedRun, selected],
@@ -716,14 +801,54 @@ export function CalculationLauncher({
 
   function selectDefinition(nextId: string) {
     const next = definitions.find((item) => item.id === nextId);
+    const draft = loadDraft(projectId, nextId);
     setSelectedId(nextId);
-    setTitle(next?.name || "");
-    setValues(makeInputValues(next?.input_schema));
+    setTitle(draft?.title ?? next?.name ?? "");
+    setValues(draft?.values ?? makeInputValues(next?.input_schema));
     setLinkedInputs([]);
     setTargetInputPath("");
     setMessage("");
     setRevisionTarget(null);
     setSubmittedRun(null);
+  }
+
+  useEffect(() => {
+    if (openedRevision.current || !initialRevisionCalculationId || !definitions.length) return;
+    const latest = sourceRuns.filter((run) => run.calculationId === initialRevisionCalculationId && run.revisable)
+      .sort((a, b) => b.runSequence - a.runSequence)[0];
+    if (!latest) {
+      openedRevision.current = true;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      openedRevision.current = true;
+      reviseRun(latest.runId);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  });
+
+  function printReport() {
+    document.body.dataset.print = "calculation";
+    const reset = () => {
+      delete document.body.dataset.print;
+      window.removeEventListener("afterprint", reset);
+    };
+    window.addEventListener("afterprint", reset);
+    window.print();
+  }
+
+  function clearInputs() {
+    try {
+      window.localStorage.removeItem(draftKey(projectId, selectedId));
+    } catch {
+      // Ignore unavailable storage.
+    }
+    setTitle(selected?.name ?? "");
+    setValues(makeInputValues(selected?.input_schema));
+    setLinkedInputs([]);
+    setRevisionTarget(null);
+    setSubmittedRun(null);
+    setMessage("Inputs cleared.");
   }
 
   function reviseRun(runId: string) {
@@ -881,36 +1006,161 @@ export function CalculationLauncher({
 
   if (loading) return <div className="calculator-launcher">Loading calculation library…</div>;
   const headingId = `calculation-title-${focusedCalculationId ?? "advanced"}`;
+  const outputPaneContent = (
+    <>
+              {isSectionCalculation(selected?.id) ? (
+                <div className="live-preview-panel">
+                  <div className="calculation-output-heading">
+                    <div>
+                      <p className="eyebrow">Engine result</p>
+                      <h3>Live preview</h3>
+                    </div>
+                    <label className="live-preview-toggle">
+                      <input type="checkbox" checked={livePreviewEnabled} onChange={(event) => setLivePreviewEnabled(event.target.checked)} />
+                      <span>Auto-update</span>
+                    </label>
+                  </div>
+                  <p className={`live-preview-status is-${!livePreviewEnabled ? "off" : sectionInputs.error ? "invalid" : preview.status === "error" ? "error" : preview.current ? "current" : "pending"}`} role="status">
+                    {!livePreviewEnabled ? "Auto-update is off. Run & save to calculate."
+                      : sectionInputs.error ? `Waiting for valid inputs · ${sectionInputs.error}`
+                      : preview.status === "error" ? preview.error
+                      : preview.current ? "Current inputs · not saved"
+                      : "Updating…"}
+                  </p>
+                  {preview.result ? (
+                    <div className={preview.current ? undefined : "live-preview-stale"}>
+                      {preview.result.kind === "concrete" ? <ConcreteSectionResults result={preview.result.value} /> : <SteelAxialResults result={preview.result.value} />}
+                    </div>
+                  ) : null}
+                  {preview.current ? (
+                    <button type="submit" form={formId} className="button button-primary live-preview-save" disabled={busy}>
+                      {busy ? "Saving…" : revisionTarget ? "Save as new revision" : "Save this result to the project"}
+                    </button>
+                  ) : null}
+                  <p className="calculation-output-note">Previews run the same engine without saving. Saving records the inputs, result and engine version in the project history.</p>
+                </div>
+              ) : null}
+              <div className="calculation-output-heading">
+                <div>
+                  <p className="eyebrow">Saved output</p>
+                  <h3 id={outputHeadingId}>Latest run</h3>
+                </div>
+                <span className={savedRun ? "calculation-output-status is-saved" : "calculation-output-status"}>
+                  {savedRun ? "Saved" : "Waiting"}
+                </span>
+              </div>
+              {savedRun ? (
+                <>
+                  <p className="calculation-output-run-title">{savedRun.title}</p>
+                  <div className="calculation-output-run-meta">
+                    <span>{savedRun.runSequence ? `Run ${savedRun.runSequence}` : "Latest saved run"}</span>
+                    <time dateTime={savedRun.createdAt}>
+                      {displayRunTimestamp(savedRun.createdAt)}
+                    </time>
+                  </div>
+                  <code className="calculation-output-run-id" title={savedRun.runId}>Run ID · {savedRun.runId || "Available in run history"}</code>
+                  {savedStructuralResult && !preview.result ? (
+                    savedStructuralResult.kind === "concrete" ? <ConcreteSectionResults result={savedStructuralResult.value} /> : <SteelAxialResults result={savedStructuralResult.value} />
+                  ) : savedOutputs.length ? (
+                    <dl className="calculation-output-values">
+                      {savedOutputs.slice(0, 8).map((output) => (
+                        <div key={output.path}>
+                          <dt>{output.label}</dt>
+                          <dd>{displayLinkedValue(output.value)}{output.unit ? ` ${output.unit}` : ""}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="calculation-output-empty">This run has no schema-matched outputs to summarize. Open its full run record below for the complete response.</p>
+                  )}
+                  {savedOutputs.length > 8 ? <p className="calculation-output-note">Showing 8 of {savedOutputs.length} outputs. The full result is in the run record below.</p> : null}
+                  {savedRun.linkedInputs?.length ? (
+                    <div className="calculation-output-links">
+                      <strong>Inputs linked in this run</strong>
+                      <ul>
+                        {savedRun.linkedInputs.map((link) => (
+                          <li key={`${link.sourceRunId}:${link.targetInputPath}`}>
+                            <span>{link.sourceOutputLabel}</span>
+                            <span aria-hidden="true">→</span>
+                            <span>{link.targetInputLabel}</span>
+                            <small>{link.sourceTitle} · {link.sourceRunSequence ? `Run ${link.sourceRunSequence}` : "Saved run"} · {link.sourceOutputPath} → {link.targetInputPath}<br />Source run · {link.sourceRunId}</small>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="calculation-output-empty-state">
+                  <span aria-hidden="true">↗</span>
+                  <p>Run this calculation to review its saved outputs beside the inputs.</p>
+                  <small>Saved results remain available in the project run history.</small>
+                </div>
+              )}
+    </>
+  );
+  const sectionAside = (
+    <aside className="calculation-output-pane is-embedded" aria-labelledby={outputHeadingId} aria-live="polite">
+      {outputPaneContent}
+    </aside>
+  );
 
   return (
-    <section className="calculator-launcher" aria-labelledby={headingId}>
-      <div className="launcher-heading">
+    <section className={guide ? "calculator-launcher is-sheet" : "calculator-launcher"} aria-labelledby={headingId}>
+      {guide && selected ? (
+        <div className="sheet-bar">
+          <div className="sheet-bar-title">
+            <small>{guide.title} · {guide.scope}</small>
+            <strong>{title || guide.title}</strong>
+            <span className={`sheet-bar-status is-${busy ? "busy" : preview.current ? "live" : savedRun ? "saved" : "draft"}`}>
+              {busy ? "Saving…" : preview.current ? (revisionTarget ? "Live · unsaved changes" : "Live · not saved") : savedRun ? `Saved${savedRun.runSequence ? ` · run ${savedRun.runSequence}` : ""}` : "Draft"}
+            </span>
+          </div>
+          {shownStructuralResult ? (
+            <CheckChips
+              chips={shownStructuralResult.kind === "steel" ? steelChips(shownStructuralResult.value) : concreteChips(shownStructuralResult.value)}
+              stale={Boolean(preview.result) && !preview.current}
+            />
+          ) : <span className="sheet-bar-empty">{sectionInputs.error ? `Waiting for inputs · ${sectionInputs.error}` : "Checks appear as soon as the inputs are complete"}</span>}
+          <div className="sheet-bar-actions no-print">
+            <button type="button" className="button button-secondary button-small" onClick={printReport} title="Print or save as PDF">Print</button>
+            <button type="submit" form={formId} className="button button-primary button-small" disabled={busy}>{revisionTarget ? "Save revision" : "Save"}</button>
+          </div>
+        </div>
+      ) : null}
+      <div className={guide ? "launcher-heading is-compact" : "launcher-heading"}>
+        {guide ? (
+          <div className="print-only calc-report-header">
+            <strong>{title || guide.title}</strong>
+            <span>{guide.title} · {guide.scope}</span>
+            <span>Printed {new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}{savedRun?.runSequence ? ` · saved run ${savedRun.runSequence}` : " · unsaved preview"}</span>
+          </div>
+        ) : null}
         <div>
-          <p className="eyebrow">{focusedCalculationId ? "Wind calculation" : "Advanced calculations"}</p>
+          <p className="eyebrow">{guide ? guide.scope : focusedCalculationId ? "Wind calculation" : "Advanced calculations"}</p>
           <h2 id={headingId}>{heading ?? "Calculation components & links"}</h2>
-          {focusedCalculationId ? <p>{selected?.description ?? "This calculation requires the corresponding backend release before it can run."}</p> :
+          {focusedCalculationId ? <p>{guide?.summary ?? selected?.description ?? "This calculation requires the corresponding backend release before it can run."}</p> :
             <p>Run an individual component or link saved outputs into its inputs. For a complete wind assessment, <Link href={calculationWorkspaceHref(WIND_ASSESSMENT_ID, projectId)}>open Wind calculation</Link>.</p>}
         </div>
       </div>
 
       {!definitions.length || (focusedCalculationId && !selected) ? (
-        <p className="form-message">{message || (focusedCalculationId ? "This calculation is not available from the connected engine yet." : "No calculations are available.")}</p>
+        <p className="form-message">{message || (focusedCalculationId ? "This calculation is not installed in the connected engine yet. Ask your administrator to deploy it, or check back shortly." : "No calculations are available.")}</p>
       ) : (
-        <form className="calculator-form" onSubmit={run}>
+        <form className="calculator-form" id={formId} onSubmit={run}>
           <fieldset className="calculation-form-fields" disabled={busy}>
-          <div className="calculation-workbench">
+          <div className={isSectionCalculation(selected?.id) ? "calculation-workbench is-sheet" : "calculation-workbench"}>
             <div className="calculation-input-pane">
-              <label>Revise a saved calculation
+              {revisableRuns.length ? <label>{guide ? "Open a saved version" : "Revise a saved calculation"}
                 <select value={revisionTarget?.calculationId ?? ""} disabled={busy} onChange={(event) => {
                   const latest = sourceRuns.filter((run) => run.calculationId === event.target.value)
                     .sort((a, b) => b.runSequence - a.runSequence)[0];
                   if (latest) reviseRun(latest.runId); else selectDefinition(selectedId);
                 }}>
                   <option value="">New calculation</option>
-                  {sourceRuns.filter((run, index) => run.revisable && (!focusedCalculationId || run.calculationDefinitionId === focusedCalculationId) && sourceRuns.findIndex((other) => other.calculationId === run.calculationId) === index)
-                    .map((run) => <option key={run.calculationId} value={run.calculationId}>{run.title} · Run {run.runSequence}</option>)}
+                  {revisableRuns.map((run) => <option key={run.calculationId} value={run.calculationId}>{run.title} · Run {run.runSequence}</option>)}
                 </select>
-              </label>
+              </label> : null}
               {!focusedCalculationId ? <label>
                 Calculation
                 <select value={selectedId} onChange={(event) => selectDefinition(event.target.value)}>
@@ -920,7 +1170,11 @@ export function CalculationLauncher({
 
               {selected?.id === FRAME_ANALYSIS_ID ? <p className="form-message"><Link href={calculationWorkspaceHref(FRAME_ANALYSIS_ID, projectId)}>Open Frame analysis</Link> to edit the model visually and review force and deflection diagrams.</p> : null}
 
-              {selected ? (
+              {selected && guide ? (
+                <div className="definition-note">
+                  <p>{guide.limits}</p>
+                </div>
+              ) : selected ? (
                 <div className="definition-note">
                   <strong>{selected.standard?.name || "Engineering calculation"}</strong>
                   <span>{selected.standard?.edition ? ` · ${selected.standard.edition}` : ""}</span>
@@ -928,12 +1182,26 @@ export function CalculationLauncher({
                 </div>
               ) : null}
 
-              <label>
-                Calculation title
-                <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required />
-              </label>
+              <div className="calculation-title-row">
+                <label>
+                  Calculation title
+                  <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required placeholder="e.g. Level 2 transfer beam B4" />
+                </label>
+                {isSectionCalculation(selected?.id) && !revisionTarget ? <button type="button" className="button button-secondary button-small" onClick={clearInputs}>Clear inputs</button> : null}
+              </div>
 
-              <div className="schema-input-grid">
+              {selected?.id === AS3600_SECTION_ID ? (
+                <ConcreteSectionEditor
+                  values={values}
+                  onChange={setValues}
+                  result={shownStructuralResult?.kind === "concrete" ? shownStructuralResult.value : null}
+                  resultCurrent={preview.current}
+                  disabled={busy || linkedInputs.length > 0}
+                  aside={sectionAside}
+                />
+              ) : selected?.id === AS4100_SECTION_ID ? (
+                <SteelAxialEditor values={values} onChange={setValues} disabled={busy || linkedInputs.length > 0} aside={sectionAside} />
+              ) : <div className="schema-input-grid">
                 {Object.entries(selected?.input_schema?.properties ?? {}).map(([key, schema]) => (
                   <SchemaField
                     key={key}
@@ -946,8 +1214,11 @@ export function CalculationLauncher({
                     onChange={(value) => setValues((current) => ({ ...current, [key]: value }))}
                   />
                 ))}
-              </div>
+              </div>}
+              {isSectionCalculation(selected?.id) && linkedInputs.length ? <p className="form-message">Linked inputs are locked. Remove the links to edit the section visually.</p> : null}
 
+              <details className="calculation-link-disclosure" open={!guide || linkedInputs.length > 0 || undefined}>
+              <summary>Link a value from another saved calculation <span>{linkedInputs.length ? `${linkedInputs.length} linked` : "optional"}</span></summary>
               <section className="calculation-link-builder" aria-labelledby="calculation-link-title">
                 {revisionTarget && linkedInputs.length ? <button type="button" className="button button-secondary" disabled={busy} onClick={refreshLinkedSources}>Use latest source runs</button> : null}
                 <div className="calculation-link-builder-heading">
@@ -1022,6 +1293,7 @@ export function CalculationLauncher({
                 ) : null}
                 <p className="calculation-link-note">The selected source run is immutable. The server resolves it again, validates structured values and units, and records the exact run provenance. No unit conversion is implicit.</p>
               </section>
+              </details>
 
               <div className="form-actions">
                 <button className="button button-primary" type="submit" disabled={busy || !selected?.input_schema}>
@@ -1031,63 +1303,11 @@ export function CalculationLauncher({
               {message ? <p className="form-message" role="status" aria-live="polite">{message}</p> : null}
             </div>
 
-            <aside className="calculation-output-pane" aria-labelledby={outputHeadingId} aria-live="polite">
-              <div className="calculation-output-heading">
-                <div>
-                  <p className="eyebrow">Saved output</p>
-                  <h3 id={outputHeadingId}>Latest run</h3>
-                </div>
-                <span className={savedRun ? "calculation-output-status is-saved" : "calculation-output-status"}>
-                  {savedRun ? "Saved" : "Waiting"}
-                </span>
-              </div>
-              {savedRun ? (
-                <>
-                  <p className="calculation-output-run-title">{savedRun.title}</p>
-                  <div className="calculation-output-run-meta">
-                    <span>{savedRun.runSequence ? `Run ${savedRun.runSequence}` : "Latest saved run"}</span>
-                    <time dateTime={savedRun.createdAt}>
-                      {displayRunTimestamp(savedRun.createdAt)}
-                    </time>
-                  </div>
-                  <code className="calculation-output-run-id" title={savedRun.runId}>Run ID · {savedRun.runId || "Available in run history"}</code>
-                  {savedOutputs.length ? (
-                    <dl className="calculation-output-values">
-                      {savedOutputs.slice(0, 8).map((output) => (
-                        <div key={output.path}>
-                          <dt>{output.label}</dt>
-                          <dd>{displayLinkedValue(output.value)}{output.unit ? ` ${output.unit}` : ""}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  ) : (
-                    <p className="calculation-output-empty">This run has no schema-matched outputs to summarize. Open its full run record below for the complete response.</p>
-                  )}
-                  {savedOutputs.length > 8 ? <p className="calculation-output-note">Showing 8 of {savedOutputs.length} outputs. The full result is in the run record below.</p> : null}
-                  {savedRun.linkedInputs?.length ? (
-                    <div className="calculation-output-links">
-                      <strong>Inputs linked in this run</strong>
-                      <ul>
-                        {savedRun.linkedInputs.map((link) => (
-                          <li key={`${link.sourceRunId}:${link.targetInputPath}`}>
-                            <span>{link.sourceOutputLabel}</span>
-                            <span aria-hidden="true">→</span>
-                            <span>{link.targetInputLabel}</span>
-                            <small>{link.sourceTitle} · {link.sourceRunSequence ? `Run ${link.sourceRunSequence}` : "Saved run"} · {link.sourceOutputPath} → {link.targetInputPath}<br />Source run · {link.sourceRunId}</small>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <div className="calculation-output-empty-state">
-                  <span aria-hidden="true">↗</span>
-                  <p>Run this calculation to review its saved outputs beside the inputs.</p>
-                  <small>Saved results remain available in the project run history.</small>
-                </div>
-              )}
-            </aside>
+            {isSectionCalculation(selected?.id) ? null : (
+              <aside className="calculation-output-pane" aria-labelledby={outputHeadingId} aria-live="polite">
+                {outputPaneContent}
+              </aside>
+            )}
           </div>
           </fieldset>
         </form>

@@ -1,8 +1,12 @@
 "use client";
 
-import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState, WheelEvent } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import styles from "./pynite-workbench.module.css";
+import { FrameCanvas, OVERLAY_CHOICES, type CanvasOverlay } from "@/components/frame-canvas";
+import { FRAME_ANALYSIS_ID } from "@/lib/calculation-catalogue";
+import type { Vec3 } from "@/lib/frame-geometry";
+import { useLivePreview } from "@/lib/use-live-preview";
 import {
   FrameDistributedLoad,
   FrameModel,
@@ -50,6 +54,7 @@ type Props = {
 };
 
 type ViewTab = "model" | "loads" | "results";
+type ViewportMode = "model" | "diagrams";
 type ResultKind = keyof Pick<PyniteStation, "moment_y_knm" | "moment_z_knm" | "shear_y_kn" | "shear_z_kn" | "axial_kn" | "deflection_y_m" | "deflection_z_m">;
 
 function resultFromUnknown(value: unknown): PyniteResult | null {
@@ -62,6 +67,17 @@ function resultFromUnknown(value: unknown): PyniteResult | null {
 
 function normalizePyniteInputs(inputs: PyniteInputs): PyniteInputs {
   return { ...inputs, analysis_type: inputs.analysis_type === "p_delta" ? "p_delta" : "linear" };
+}
+
+/** Enough of a model for the solver to attempt it; incomplete drafts are not sent for live preview. */
+function previewableModel(model: FrameModel) {
+  return model.members.length > 0 && model.supports.length > 0 && model.load_combinations.length > 0 &&
+    model.nodes.every((node) => [node.x_m, node.y_m, node.z_m].every(Number.isFinite));
+}
+
+/** Wall-clock time for coalescing undo steps; only called from event handlers. */
+function currentTime() {
+  return Date.now();
 }
 
 function nextId(prefix: string, values: string[]) {
@@ -95,201 +111,6 @@ function extrema<T extends Record<string, unknown>>(rows: T[], key: keyof T) {
 function fmt(value: number, digits = 3) {
   if (!Number.isFinite(value)) return "—";
   return value.toLocaleString(undefined, { maximumFractionDigits: digits });
-}
-
-function FrameCanvas({
-  model,
-  selectedNode,
-  selectedMember,
-  result,
-  activeCombo,
-  showLoads,
-  onSelectNode,
-  onSelectMember,
-}: {
-  model: FrameModel;
-  selectedNode: string;
-  selectedMember: string;
-  result: PyniteResult | null;
-  activeCombo: string;
-  showLoads: boolean;
-  onSelectNode: (id: string) => void;
-  onSelectMember: (id: string) => void;
-}) {
-  const [yaw, setYaw] = useState(-38);
-  const [pitch, setPitch] = useState(25);
-  const [zoom, setZoom] = useState(1);
-  const pointer = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null);
-  const width = 900;
-  const height = 590;
-
-  const scene = useMemo(() => {
-    const yawRad = (yaw * Math.PI) / 180;
-    const pitchFactor = Math.sin((pitch * Math.PI) / 180);
-    const verticalFactor = Math.cos((pitch * Math.PI) / 180);
-    const projected = model.nodes.map((node) => {
-      const x = node.x_m * Math.cos(yawRad) - node.z_m * Math.sin(yawRad);
-      const depth = node.x_m * Math.sin(yawRad) + node.z_m * Math.cos(yawRad);
-      return {
-        node,
-        x,
-        y: depth * pitchFactor - node.y_m * verticalFactor,
-      };
-    });
-    if (!projected.length) return { points: new Map<string, { x: number; y: number }>(), scale: 1 };
-    const minX = Math.min(...projected.map((point) => point.x));
-    const maxX = Math.max(...projected.map((point) => point.x));
-    const minY = Math.min(...projected.map((point) => point.y));
-    const maxY = Math.max(...projected.map((point) => point.y));
-    const spanX = Math.max(maxX - minX, 1);
-    const spanY = Math.max(maxY - minY, 1);
-    const scale = Math.min((width - 150) / spanX, (height - 130) / spanY) * zoom;
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    const points = new Map(
-      projected.map(({ node, x, y }) => [node.id, {
-        x: width / 2 + (x - centerX) * scale,
-        y: height / 2 - (y - centerY) * scale,
-      }]),
-    );
-    return { points, scale };
-  }, [height, model.nodes, pitch, width, yaw, zoom]);
-
-  function onPointerDown(event: PointerEvent<SVGSVGElement>) {
-    if (event.button !== 0) return;
-    pointer.current = { x: event.clientX, y: event.clientY, yaw, pitch };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function onPointerMove(event: PointerEvent<SVGSVGElement>) {
-    if (!pointer.current) return;
-    const deltaX = event.clientX - pointer.current.x;
-    const deltaY = event.clientY - pointer.current.y;
-    setYaw(pointer.current.yaw + deltaX * 0.45);
-    setPitch(Math.max(-70, Math.min(70, pointer.current.pitch - deltaY * 0.35)));
-  }
-
-  function onPointerUp() {
-    pointer.current = null;
-  }
-
-  function onWheel(event: WheelEvent<SVGSVGElement>) {
-    event.preventDefault();
-    setZoom((current) => Math.max(0.45, Math.min(2.8, current * (event.deltaY > 0 ? 0.9 : 1.1))));
-  }
-
-  const loadsByMember = showLoads
-    ? new Map<string, FrameDistributedLoad[]>(
-        model.member_distributed_loads.reduce((entries, load) => {
-          const current = entries.get(load.member_id) ?? [];
-          entries.set(load.member_id, [...current, load]);
-          return entries;
-        }, new Map<string, FrameDistributedLoad[]>()),
-      )
-    : new Map<string, FrameDistributedLoad[]>();
-
-  return (
-    <div className={styles.canvasFrame}>
-      <div className={styles.canvasTools}>
-        <span className={styles.canvasHint}>Drag to orbit · scroll to zoom</span>
-        <button type="button" onClick={() => { setYaw(-38); setPitch(25); setZoom(1); }}>Fit view</button>
-      </div>
-      <svg
-        className={styles.canvas}
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label="Interactive 3D frame model with schematic load labels; load glyphs do not show vector direction or scale"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onWheel={onWheel}
-      >
-        <defs>
-          <pattern id="fea-grid" width="28" height="28" patternUnits="userSpaceOnUse">
-            <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#1b332f" strokeWidth="1" />
-          </pattern>
-        </defs>
-        <rect width={width} height={height} fill="url(#fea-grid)" />
-        <path d="M36 36 H864 V554 H36 Z" fill="none" stroke="#203a35" strokeWidth="1" />
-        <g className={styles.axisMark}>
-          <path d="M70 500 H126" stroke="#93bb9f" strokeWidth="2" />
-          <path d="M70 500 V444" stroke="#e8b971" strokeWidth="2" />
-          <path d="M70 500 L45 519" stroke="#79a7d9" strokeWidth="2" />
-          <text x="132" y="504">X</text><text x="66" y="434">Y</text><text x="33" y="530">Z</text>
-        </g>
-        {model.members.map((member) => {
-          const start = scene.points.get(member.start_node);
-          const end = scene.points.get(member.end_node);
-          if (!start || !end) return null;
-          const selected = selectedMember === member.id;
-          const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
-          const memberLoads = loadsByMember.get(member.id) ?? [];
-          return (
-            <g key={member.id}>
-              <line
-                x1={start.x} y1={start.y} x2={end.x} y2={end.y}
-                className={selected ? styles.memberSelected : styles.member}
-                onClick={() => onSelectMember(member.id)}
-              />
-              <line
-                x1={start.x} y1={start.y} x2={end.x} y2={end.y}
-                className={styles.memberHitArea}
-                onClick={() => onSelectMember(member.id)}
-              />
-              <text x={midpoint.x + 8} y={midpoint.y - 9} className={styles.memberLabel}>{member.id}</text>
-              {memberLoads.map((load, index) => {
-                const markerX = midpoint.x + index * 14;
-                const markerY = midpoint.y - 14 - index * 11;
-                const span = `${load.start_m ?? 0}–${load.end_m ?? "full"} m`;
-                return (
-                  <g key={`${member.id}-${load.load_case}-${index}`}>
-                    <circle cx={markerX} cy={markerY} r="3" fill="#e6bd8b" />
-                    <text x={markerX + 7} y={markerY + 3} className={styles.loadLabel}>
-                      {load.load_case} · {load.direction} · {load.start_kn_m}→{load.end_kn_m} kN/m · {span}
-                    </text>
-                  </g>
-                );
-              })}
-            </g>
-          );
-        })}
-        {model.nodes.map((node) => {
-          const point = scene.points.get(node.id);
-          if (!point) return null;
-          const restrained = supportFor(model, node.id);
-          return (
-            <g key={node.id} onClick={() => onSelectNode(node.id)}>
-              {restrained ? (
-                <path d={`M${point.x - 11} ${point.y + 19} L${point.x + 11} ${point.y + 19} L${point.x} ${point.y + 3} Z`} className={styles.supportMarker} />
-              ) : null}
-              <circle
-                cx={point.x} cy={point.y} r={selectedNode === node.id ? 7 : 5}
-                className={selectedNode === node.id ? styles.nodeSelected : styles.node}
-              />
-              <text x={point.x + 10} y={point.y + 4} className={styles.nodeLabel}>{node.id}</text>
-            </g>
-          );
-        })}
-        {!model.members.length ? (
-          <text x={width / 2} y={height / 2} textAnchor="middle" className={styles.canvasEmpty}>
-            Add nodes and connect them to start your frame model
-          </text>
-        ) : null}
-        {result ? (
-          <text x={width - 52} y={height - 25} textAnchor="end" className={styles.resultStamp}>
-            SOLVED · {activeCombo}
-          </text>
-        ) : null}
-      </svg>
-      <div className={styles.canvasFooter}>
-        <span>{model.nodes.length} nodes</span>
-        <span>{model.members.length} members</span>
-        <span>{model.supports.length} supports</span>
-        <span>{showLoads ? `${model.node_loads.length + model.member_distributed_loads.length} loads shown` : "Loads hidden"}</span>
-      </div>
-    </div>
-  );
 }
 
 function MemberDiagram({ member, kind, label, unit, valueScale = 1 }: { member: PyniteMemberResult | null; kind: ResultKind; label: string; unit: string; valueScale?: number }) {
@@ -352,6 +173,14 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
   const [axisReviewConfirmed, setAxisReviewConfirmed] = useState(false);
   const [activeSavedRun, setActiveSavedRun] = useState<{ id: string; calculationId: string; runSequence: number; stale: boolean; staleReasons: string[]; superseded?: boolean } | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [liveSolve, setLiveSolve] = useState(true);
+  const [overlay, setOverlay] = useState<CanvasOverlay>("deformed");
+  const [magnifier, setMagnifier] = useState(1);
+  const [viewportMode, setViewportMode] = useState<ViewportMode>("model");
+  const undoHistory = useRef<{ past: FrameModel[]; future: FrameModel[]; lastKey: string; lastAt: number }>({ past: [], future: [], lastKey: "", lastAt: 0 });
+  const [historyCounts, setHistoryCounts] = useState({ past: 0, future: 0 });
+  const [showTip, setShowTip] = useState(false);
+  const [selectionKind, setSelectionKind] = useState<"node" | "member">("member");
   const fileInput = useRef<HTMLInputElement>(null);
   const model = inputs.model;
   const selectedNodeRow = model.nodes.find((node) => node.id === selectedNode) ?? model.nodes[0];
@@ -361,8 +190,19 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
   const firstSection = model.sections[0];
   const selectedMaterialRow = model.materials.find((material) => material.id === selectedMemberRow?.material) ?? firstMaterial;
   const selectedSectionRow = model.sections.find((section) => section.id === selectedMemberRow?.section) ?? firstSection;
-  const activeNodeResults = currentNodeResults(result, activeCombo);
-  const activeMemberResult = currentMemberResult(result, selectedMember, activeCombo);
+  const liveInputs = useMemo(
+    () => previewableModel(inputs.model) ? { ...inputs, analysis_type: analysisType } : null,
+    [analysisType, inputs],
+  );
+  const preview = useLivePreview(FRAME_ANALYSIS_ID, liveInputs, { enabled: liveSolve && hydrated, delayMs: 550, parse: resultFromUnknown });
+  // A saved run result is shown until the model changes; after that the live preview takes over.
+  const shownResult = result ?? preview.result;
+  const shownResultCurrent = result ? true : preview.current;
+  const activeComboShown = shownResult && !shownResult.load_combinations.includes(activeCombo)
+    ? shownResult.load_combinations[0] ?? activeCombo
+    : activeCombo;
+  const activeNodeResults = currentNodeResults(shownResult, activeComboShown);
+  const activeMemberResult = currentMemberResult(shownResult, selectedMember, activeComboShown);
   const resultRuns = history;
 
   const focusModel = useCallback((nextInputs: PyniteInputs, preferredCombo?: string) => {
@@ -441,6 +281,26 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     }
   }, [activeSavedRun, analysisType, hydrated, inputs, projectId, title, windSourceLink]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        setShowTip(window.localStorage.getItem("opencalcs:pynite:tip-dismissed") !== "1");
+      } catch {
+        setShowTip(true);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  function dismissTip() {
+    setShowTip(false);
+    try {
+      window.localStorage.setItem("opencalcs:pynite:tip-dismissed", "1");
+    } catch {
+      // Storage unavailable; the tip simply returns next visit.
+    }
+  }
+
   const exactWindSource = windSourceLink
     ? windRuns.find((run) => run.id === windSourceLink.sourceRunId && run.calculationId === windSourceLink.sourceCalculationId)
     : undefined;
@@ -473,6 +333,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
       const applied = applyWindSource({ ...inputs, analysis_type: analysisType }, source);
       analysisRevision.current += 1;
       setInputs(applied.inputs);
+      resetHistory();
       setWindSourceLink(applied.link);
       setActiveSavedRun((current) => current ? { ...current, stale: false, staleReasons: [] } : current);
       setWindRunSelection(source.id);
@@ -495,18 +356,66 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     setMessage("Wind provenance detached. The displayed distributed loads remain as a manual snapshot.");
   }
 
-  function updateModel(update: (current: FrameModel) => FrameModel) {
+  function linkedLoadsChanged(next: FrameModel, current: FrameModel) {
+    return Boolean(windSourceLink) &&
+      JSON.stringify(next.member_distributed_loads) !== JSON.stringify(current.member_distributed_loads);
+  }
+
+  /**
+   * Applies an edit and records the previous model for undo. Rapid edits sharing a
+   * `coalesce` key (a node drag) collapse into one undo step.
+   */
+  function updateModel(update: (current: FrameModel) => FrameModel, coalesce?: string) {
+    const nextModel = update(inputs.model);
+    if (nextModel === inputs.model) return;
+    if (linkedLoadsChanged(nextModel, inputs.model)) {
+      setMessage("These distributed loads are linked to a saved wind run. Unlink the wind source before editing or removing them.");
+      return;
+    }
+    const history = undoHistory.current;
+    const now = currentTime();
+    if (!coalesce || coalesce !== history.lastKey || now - history.lastAt > 800) {
+      history.past = [...history.past.slice(-99), inputs.model];
+    }
+    history.future = [];
+    history.lastKey = coalesce ?? "";
+    history.lastAt = now;
+    setHistoryCounts({ past: undoHistory.current.past.length, future: undoHistory.current.future.length });
     analysisRevision.current += 1;
     setAxisReviewConfirmed(false);
-    setInputs((current) => {
-      const nextModel = update(current.model);
-      if (windSourceLink && JSON.stringify(nextModel.member_distributed_loads) !== JSON.stringify(current.model.member_distributed_loads)) {
-        setMessage("These distributed loads are linked to a saved wind run. Unlink the wind source before editing or removing them.");
-        return current;
-      }
-      return { ...current, model: nextModel };
-    });
+    setInputs({ ...inputs, model: nextModel });
     setResult(null);
+  }
+
+  function resetHistory() {
+    undoHistory.current = { past: [], future: [], lastKey: "", lastAt: 0 };
+    setHistoryCounts({ past: undoHistory.current.past.length, future: undoHistory.current.future.length });
+  }
+
+  function stepHistory(direction: "undo" | "redo") {
+    const history = undoHistory.current;
+    const source = direction === "undo" ? history.past : history.future;
+    const target = source[source.length - 1];
+    if (!target) return;
+    if (linkedLoadsChanged(target, inputs.model)) {
+      setMessage("This step changes wind-linked loads. Unlink the wind source before undoing it.");
+      return;
+    }
+    if (direction === "undo") {
+      history.past = history.past.slice(0, -1);
+      history.future = [...history.future, inputs.model];
+    } else {
+      history.future = history.future.slice(0, -1);
+      history.past = [...history.past, inputs.model];
+    }
+    history.lastKey = "";
+    setHistoryCounts({ past: undoHistory.current.past.length, future: undoHistory.current.future.length });
+    analysisRevision.current += 1;
+    setInputs({ ...inputs, model: target });
+    setResult(null);
+    if (!target.nodes.some((node) => node.id === selectedNode)) setSelectedNode(target.nodes[0]?.id ?? "");
+    if (!target.members.some((member) => member.id === selectedMember)) setSelectedMember(target.members[0]?.id ?? "");
+    setMessage(direction === "undo" ? "Undid the last change." : "Redid the change.");
   }
 
   function addNode() {
@@ -581,12 +490,48 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     setMessage(`Removed ${removedId}, its connected members, restraints, and loads.`);
   }
 
+  function moveNode(id: string, position: Vec3) {
+    updateModel((current) => ({
+      ...current,
+      nodes: current.nodes.map((node) => node.id === id ? { ...node, x_m: position[0], y_m: position[1], z_m: position[2] } : node),
+    }), `move:${id}`);
+  }
+
+  function addNodeAt(position: Vec3) {
+    const existing = model.nodes.find((node) => node.x_m === position[0] && node.y_m === position[1] && node.z_m === position[2]);
+    if (existing) {
+      setSelectedNode(existing.id);
+      setMessage(`${existing.id} is already at that point.`);
+      return;
+    }
+    const id = nextId("N", model.nodes.map((node) => node.id));
+    updateModel((current) => ({ ...current, nodes: [...current.nodes, { id, x_m: position[0], y_m: position[1], z_m: position[2] }] }));
+    setSelectedNode(id);
+    setMessage(`Added ${id} at (${fmt(position[0])}, ${fmt(position[1])}, ${fmt(position[2])}) m.`);
+  }
+
+  function connectNodes(start: string, end: string) {
+    if (model.members.some((member) => (member.start_node === start && member.end_node === end) || (member.start_node === end && member.end_node === start))) {
+      setMessage(`${start} and ${end} are already connected.`);
+      return;
+    }
+    const id = nextId("M", model.members.map((member) => member.id));
+    const section = model.sections.find((item) => item.id === selectedMemberRow?.section) ?? firstSection;
+    const material = model.materials.find((item) => item.id === selectedMemberRow?.material) ?? firstMaterial;
+    updateModel((current) => ({
+      ...current,
+      members: [...current.members, { id, start_node: start, end_node: end, material: material?.id ?? "Steel", section: section?.id ?? "DemoSection" }],
+    }));
+    setSelectedMember(id);
+    setMessage(`Connected ${start} to ${end} as ${id} using ${section?.id ?? "the first section"}.`);
+  }
+
   function updateNode(id: string, field: keyof FrameNode, value: string) {
     const numericValue = Number(value);
     updateModel((current) => ({
       ...current,
       nodes: current.nodes.map((node) => node.id === id ? { ...node, [field]: numericValue } : node),
-    }));
+    }), `node:${id}:${field}`);
   }
 
   function toggleSupportDof(dof: "dx" | "dy" | "dz" | "rx" | "ry" | "rz", checked: boolean) {
@@ -694,7 +639,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
       materials: current.materials.map((material) => material.id === id
         ? { ...material, [field]: numericValue }
         : material),
-    }));
+    }), `material:${id}:${field}`);
   }
 
   function updateSection(id: string, field: keyof Omit<FrameModel["sections"][number], "id">, value: string) {
@@ -704,7 +649,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
       sections: current.sections.map((section) => section.id === id
         ? { ...section, [field]: numericValue }
         : section),
-    }));
+    }), `section:${id}:${field}`);
   }
 
   function addMaterial() {
@@ -754,7 +699,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
       load_combinations: current.load_combinations.map((combo) => combo.id === comboId
         ? { ...combo, factors: { ...combo.factors, [caseId]: factor } }
         : combo),
-    }));
+    }), `factor:${comboId}:${caseId}`);
   }
 
   function setAnalysis(value: PyniteInputs["analysis_type"]) {
@@ -856,6 +801,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     analysisRevision.current += 1;
     setTitle(run.title);
     setInputs(savedInputs);
+    resetHistory();
     setAnalysisType(savedInputs.analysis_type);
     setActiveSavedRun({ id: run.id, calculationId: run.calculationId, runSequence: run.runSequence, stale: run.stale, staleReasons: run.staleReasons, superseded: run.superseded });
     setWindSourceLink(restoredWindLink);
@@ -895,6 +841,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
       setActiveSavedRun(null);
       setWindSourceLink(null);
       setInputs(normalizedInputs);
+      resetHistory();
       setAnalysisType(normalizedInputs.analysis_type);
       if (typeof parsed.title === "string") setTitle(parsed.title);
       setResult(null);
@@ -911,6 +858,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     analysisRevision.current += 1;
     const sample = structuredClone(SAMPLE_FRAME_INPUTS);
     setInputs(sample);
+    resetHistory();
     setTitle("Simply supported beam");
     setAnalysisType("linear");
     setActiveSavedRun(null);
@@ -919,6 +867,29 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     setResult(null);
     setMessage("Loaded the six-metre demo beam. This example uses illustrative section properties.");
   }
+
+  // Keyboard shortcuts, re-bound each render so handlers see current state. Typing in a
+  // form field is never intercepted.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.closest("input, textarea, select, [contenteditable='true']"))) return;
+      const mod = event.ctrlKey || event.metaKey;
+      if (mod && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        stepHistory(event.shiftKey ? "redo" : "undo");
+      } else if (mod && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        stepHistory("redo");
+      } else if ((event.key === "Delete" || event.key === "Backspace") && !mod) {
+        event.preventDefault();
+        if (selectionKind === "node") removeSelectedNode();
+        else removeSelectedMember();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   const diagramChoices: Array<{ value: ResultKind; label: string; unit: string }> = [
     { value: "moment_z_knm", label: "BMD · Mz local axis", unit: "kN·m" },
@@ -932,30 +903,53 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
 
   return (
     <section className={styles.workspace} aria-label="Frame analysis workspace">
-      <header className={styles.topbar}>
-        <div className={styles.projectIdentity}>
-          <span className={styles.brandMark}>OC</span>
-          <div><span>OpenCalcs · Structural FEA</span><strong>{projectName}</strong></div>
-        </div>
-        <label className={styles.modelName}>
-          <span className={styles.srOnly}>Model name</span>
-          <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={120} />
+      <header className={styles.ribbonBar}>
+        <label className={styles.ribbonTitle}>
+          <span>Frame analysis · {projectName}</span>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={120} aria-label="Model name" placeholder="Name this model" />
         </label>
-        <div className={styles.topbarActions}>
-          <select aria-label="Load a saved project run" value="" onChange={(event) => openSavedRun(event.target.value)}>
-            <option value="">Open saved run · {history.length}</option>
-            {history.map((run) => (
-              <option key={run.id} value={run.id}>
+        <div className={styles.ribbon}>
+          <div className={styles.ribbonGroup}>
+            <div className={styles.ribbonButtons}>
+              <select aria-label="Open a saved project run" value="" onChange={(event) => openSavedRun(event.target.value)}>
+                <option value="">Open saved run ({history.length})</option>
+                {history.map((run) => (
+                  <option key={run.id} value={run.id}>
                     {run.title} · run {run.runSequence} · {new Date(run.createdAt).toLocaleDateString()}{run.superseded ? " · superseded" : ""}
-              </option>
-            ))}
-          </select>
-          <button type="button" onClick={exportModel}>Export</button>
-          <button type="button" onClick={() => fileInput.current?.click()}>Import</button>
-          <input ref={fileInput} className={styles.fileInput} type="file" accept="application/json,.json" onChange={importModel} />
-          <button type="button" className={styles.runButton} disabled={!canRun || busy} onClick={runAnalysis}>
-            {busy ? "Solving…" : "Run analysis"}
-          </button>
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={() => fileInput.current?.click()}>Import</button>
+              <button type="button" onClick={exportModel}>Export</button>
+              <input ref={fileInput} className={styles.fileInput} type="file" accept="application/json,.json" onChange={importModel} />
+            </div>
+            <span>File</span>
+          </div>
+          <div className={styles.ribbonGroup}>
+            <div className={styles.ribbonButtons}>
+              <button type="button" onClick={() => stepHistory("undo")} disabled={!historyCounts.past} title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+              <button type="button" onClick={() => stepHistory("redo")} disabled={!historyCounts.future} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
+              <button type="button" onClick={loadSample} title="Replace the model with the demo beam">Demo</button>
+            </div>
+            <span>Edit</span>
+          </div>
+          <div className={styles.ribbonGroup}>
+            <div className={styles.ribbonButtons}>
+              <div className={styles.segmented} role="group" aria-label="Analysis method">
+                <button type="button" aria-pressed={analysisType === "linear"} className={analysisType === "linear" ? styles.segmentActive : styles.segment} onClick={() => setAnalysis("linear")}>Linear</button>
+                <button type="button" aria-pressed={analysisType === "p_delta"} className={analysisType === "p_delta" ? styles.segmentActive : styles.segment} onClick={() => setAnalysis("p_delta")}>P-Δ</button>
+              </div>
+              <label className={styles.liveSwitch} title="Re-solve automatically while editing (not saved)">
+                <input type="checkbox" checked={liveSolve} onChange={(event) => setLiveSolve(event.target.checked)} />
+                <span aria-hidden="true" />Live
+              </label>
+              <button type="button" className={styles.runButton} disabled={!canRun || busy || frameRunBlocked} onClick={runAnalysis}
+                title={canRun ? "Solve and save this model to the project" : "Only owners, admins and engineers can save analysis runs"}>
+                {busy ? "Saving…" : activeSavedRun ? "Save revision" : "Run & save"}
+              </button>
+            </div>
+            <span>Analysis</span>
+          </div>
         </div>
       </header>
 
@@ -1178,18 +1172,19 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
           {tab === "results" ? (
             <div className={styles.panelScroll}>
               <section className={styles.toolSection}>
-                <div className={styles.sectionTitle}><h3>Analysis method</h3></div>
-                <label className={styles.field}>Solver<select value={analysisType} onChange={(event) => setAnalysis(event.target.value as PyniteInputs["analysis_type"])}><option value="linear">Linear elastic</option><option value="p_delta">P-Delta · second order</option></select></label>
-                <button type="button" className={styles.runButtonWide} disabled={!canRun || busy || frameRunBlocked} onClick={runAnalysis}>{busy ? "Solving model…" : activeSavedRun ? "Save new frame revision" : "Run and save analysis"}</button>
+                <div className={styles.sectionTitle}><h3>Analysis</h3><span>{analysisType === "p_delta" ? "P-Δ second order" : "Linear elastic"} · {liveSolve ? "live" : "manual"}</span></div>
+                <p className={styles.helpText}>Change the method, live solving and saving from the Analysis group in the toolbar.</p>
                 {frameRunBlocked ? <p className={styles.helpText}>{windLinkErrors[0] ?? `Review a nonzero factor for wind load cases: ${unassignedWindCases.join(", ")}.`}</p> : null}
-                {!canRun ? <p className={styles.helpText}>Your project role can view the model, but only owners, admins, and engineers can run analysis.</p> : null}
+                {!canRun ? <p className={styles.helpText}>Your project role can view the model, but only owners, admins, and engineers can save analysis runs.</p> : null}
+                {liveSolve && preview.status === "error" && !result ? <p className={styles.helpText}>{preview.error}</p> : null}
+                {liveSolve && !liveInputs ? <p className={styles.helpText}>Live solve starts once the model has a member, a support and a load combination.</p> : null}
               </section>
-              {result ? (
+              {shownResult ? (
                 <>
                   <section className={styles.toolSection}>
-                    <div className={styles.sectionTitle}><h3>Result set</h3><span className={styles.solvedPill}>SOLVED · {result.solver.name}</span></div>
-                    <p className={styles.resultContext}>{title} · {selectedMemberRow?.id ?? "No member selected"} · {activeCombo}</p>
-                    <label className={styles.field}>Combination<select value={activeCombo} onChange={(event) => setActiveCombo(event.target.value)}>{result.load_combinations.map((combo) => <option key={combo}>{combo}</option>)}</select></label>
+                    <div className={styles.sectionTitle}><h3>Result set</h3><span className={result ? styles.solvedPill : shownResultCurrent ? styles.livePill : styles.livePillStale}>{result ? "SAVED RUN" : shownResultCurrent ? "LIVE · UNSAVED" : "UPDATING"} · {shownResult.solver.name}</span></div>
+                    <p className={styles.resultContext}>{title} · {selectedMemberRow?.id ?? "No member selected"} · {activeComboShown}</p>
+                    <label className={styles.field}>Combination<select value={activeComboShown} onChange={(event) => setActiveCombo(event.target.value)}>{shownResult.load_combinations.map((combo) => <option key={combo}>{combo}</option>)}</select></label>
                     <div className={styles.resultMetricGrid}>
                       <div><span>Max sampled |dy| · selected member</span><strong>{fmt(resultMetrics.displacementMm)} <small>mm</small></strong></div>
                       <div><span>Max reaction</span><strong>{fmt(resultMetrics.reactionKn)} <small>kN</small></strong></div>
@@ -1207,19 +1202,19 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
                       ))}
                     </div>
                   </section>
-                  {result.warnings.length ? (
-                    <section className={styles.warningBox}><strong>Solver notes</strong>{result.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</section>
+                  {shownResult.warnings.length ? (
+                    <section className={styles.warningBox}><strong>Solver notes</strong>{shownResult.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</section>
                   ) : null}
                   <section className={styles.limitationsBox}>
                     <strong>Use and limitations</strong>
-                    {result.limitations.map((limitation, index) => <p key={index}>{limitation}</p>)}
+                    {shownResult.limitations.map((limitation, index) => <p key={index}>{limitation}</p>)}
                   </section>
                 </>
               ) : (
                 <div className={styles.emptyPanel}>
                   <span className={styles.emptyIcon}>↗</span>
                   <strong>No analysis results yet</strong>
-                  <p>Check geometry, restraints, material and section properties, then run the PyNite solver.</p>
+                  <p>{liveSolve ? "Results appear here as soon as the model can be solved." : "Check geometry, restraints, material and section properties, then run the PyNite solver."}</p>
                 </div>
               )}
             </div>
@@ -1228,40 +1223,71 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
 
         <section className={styles.viewportPanel} aria-label="Structural model view">
           <div className={styles.viewportHeader}>
-            <div><span className={styles.eyebrow}>{tab === "results" ? "Analysis results" : "3D model"}</span><strong>{title || "Untitled model"}</strong></div>
+            <div><span className={styles.eyebrow}>{viewportMode === "diagrams" ? "Member diagrams" : shownResult ? "Model and results" : "Frame model"}</span><strong>{title || "Untitled model"}</strong></div>
             <div className={styles.viewportActions}>
-              {tab === "results" ? <button type="button" className={styles.modelViewButton} onClick={() => setTab("model")}>View model</button> : <label className={styles.toggle}><input type="checkbox" checked={showLoads} onChange={(event) => setShowLoads(event.target.checked)} /><span>Loads</span></label>}
-              <span className={styles.unitsBadge}>kN · m</span>
+              <div className={styles.segmented} role="group" aria-label="Viewport">
+                <button type="button" aria-pressed={viewportMode === "model"} className={viewportMode === "model" ? styles.segmentActive : styles.segment} onClick={() => setViewportMode("model")}>Model</button>
+                <button type="button" aria-pressed={viewportMode === "diagrams"} className={viewportMode === "diagrams" ? styles.segmentActive : styles.segment} onClick={() => setViewportMode("diagrams")}>Member diagrams</button>
+              </div>
+              {viewportMode === "model" ? <div className={styles.overlayControls}>
+                <select aria-label="Result overlay" value={overlay} onChange={(event) => setOverlay(event.target.value as CanvasOverlay)} disabled={!shownResult}>
+                  {OVERLAY_CHOICES.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}{choice.unit ? ` · ${choice.unit}` : ""}</option>)}
+                </select>
+                {overlay !== "none" && shownResult ? <select aria-label="Overlay scale" value={magnifier} onChange={(event) => setMagnifier(Number(event.target.value))}>
+                  {[0.25, 0.5, 1, 2, 4].map((value) => <option key={value} value={value}>Scale ×{value}</option>)}
+                </select> : null}
+                {shownResult ? <select aria-label="Overlay load combination" value={activeComboShown} onChange={(event) => setActiveCombo(event.target.value)}>
+                  {shownResult.load_combinations.map((combo) => <option key={combo}>{combo}</option>)}
+                </select> : null}
+                <label className={styles.toggle}><input type="checkbox" checked={showLoads} onChange={(event) => setShowLoads(event.target.checked)} /><span>Loads</span></label>
+              </div> : null}
+              <span className={result ? styles.solvedPill : !liveSolve ? styles.unitsBadge : preview.status === "error" ? styles.livePillError : shownResultCurrent ? styles.livePill : styles.livePillStale}>
+                {result ? "Saved run" : !liveSolve ? "Live off" : preview.status === "error" ? "Not solved" : shownResultCurrent ? "Live" : liveInputs ? "Solving…" : "Incomplete"}
+              </span>
             </div>
           </div>
-          {tab === "results" ? (
+          {showTip ? (
+            <div className={styles.tipBar} role="note">
+              <strong>Quick start</strong>
+              <span>Choose <b>Elevation X–Y</b>, then <b>Add node</b> and <b>Draw member</b> to build the frame. Results update live as you edit. <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes, <kbd>Delete</kbd> removes the selection.</span>
+              <button type="button" onClick={dismissTip}>Got it</button>
+            </div>
+          ) : null}
+          {viewportMode === "diagrams" ? (
             <div className={styles.resultsCanvas}>
-              {result ? <>
+              {shownResult ? <>
                 <div className={styles.resultsControls}>
                   <label>Member<select aria-label="Result member" value={selectedMemberRow?.id ?? ""} onChange={(event) => setSelectedMember(event.target.value)}>{model.members.map((member) => <option key={member.id} value={member.id}>{member.id}</option>)}</select></label>
-                  <label>Load combination<select aria-label="Result load combination" value={activeCombo} onChange={(event) => setActiveCombo(event.target.value)}>{result.load_combinations.map((combo) => <option key={combo}>{combo}</option>)}</select></label>
-                  <span>{activeMemberResult?.member_id ?? "No result for selection"} · {activeCombo}</span>
+                  <label>Load combination<select aria-label="Result load combination" value={activeComboShown} onChange={(event) => setActiveCombo(event.target.value)}>{shownResult.load_combinations.map((combo) => <option key={combo}>{combo}</option>)}</select></label>
+                  <span>{activeMemberResult?.member_id ?? "No result for selection"} · {activeComboShown}{result ? "" : " · live, unsaved"}</span>
                 </div>
-                <div className={styles.diagramGrid}>
+                <div className={`${styles.diagramGrid} ${shownResultCurrent ? "" : styles.overlayStale}`}>
                   <p className={styles.resultSamplingNote}>Plots show local member axes with positive values upward. Curves and extrema use {activeMemberResult?.stations.length ?? 0} equally spaced solver stations; extrema between stations may be higher.</p>
                   {diagramChoices.map((choice) => <article className={styles.diagramCard} key={choice.value}>
                     <MemberDiagram member={activeMemberResult} kind={choice.value} label={choice.label} unit={choice.unit} valueScale={choice.value.endsWith("_m") ? 1000 : 1} />
                   </article>)}
                 </div>
-              </> : <div className={styles.emptyPanel}><strong>No current result set</strong><p>Run analysis to see member diagrams. Editing the model clears the previous result set.</p></div>}
+              </> : <div className={styles.emptyPanel}><strong>No current result set</strong><p>{liveSolve ? "Complete the model to solve it live, or run and save the analysis." : "Run analysis to see member diagrams. Editing the model clears the previous result set."}</p></div>}
             </div>
           ) : <FrameCanvas
             model={model}
             selectedNode={selectedNodeRow?.id ?? ""}
             selectedMember={selectedMemberRow?.id ?? ""}
-            result={result}
-            activeCombo={activeCombo}
+            result={shownResult}
+            resultCurrent={shownResultCurrent}
+            activeCombo={activeComboShown}
             showLoads={showLoads}
-            onSelectNode={setSelectedNode}
-            onSelectMember={(id) => { setSelectedMember(id); setTab("model"); }}
+            overlay={shownResult ? overlay : "none"}
+            magnifier={magnifier}
+            editable
+            onSelectNode={(id) => { setSelectedNode(id); setSelectionKind("node"); }}
+            onSelectMember={(id) => { setSelectedMember(id); setSelectionKind("member"); if (tab !== "results") setTab("model"); }}
+            onMoveNode={moveNode}
+            onAddNode={addNodeAt}
+            onConnect={connectNodes}
           />}
           <div className={styles.bottomStatus}>
-            <span><i className={styles.statusDot} />{result ? `${result.solver.name} ${result.solver.version}` : "PyNite solver ready"}</span>
+            <span><i className={shownResult ? styles.statusDot : styles.statusDotIdle} />{shownResult ? `${shownResult.solver.name} ${shownResult.solver.version}${result ? " · saved run" : " · live preview"}` : "PyNite solver ready"}</span>
             <span>{analysisType === "p_delta" ? "P-Delta analysis" : "Linear elastic analysis"}</span>
             <span>Auto-saved draft in this browser</span>
           </div>
