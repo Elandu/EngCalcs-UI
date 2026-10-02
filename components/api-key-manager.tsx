@@ -151,7 +151,7 @@ export function ApiKeyManager({
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="CI / engineering agent"
+              placeholder="CI / engineering tool"
               maxLength={120}
               required
             />
