@@ -903,32 +903,53 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
 
   return (
     <section className={styles.workspace} aria-label="Frame analysis workspace">
-      <header className={styles.topbar}>
-        <div className={styles.projectIdentity}>
-          <span className={styles.brandMark}>OC</span>
-          <div><span>OpenCalcs · Structural FEA</span><strong>{projectName}</strong></div>
-        </div>
-        <label className={styles.modelName}>
-          <span className={styles.srOnly}>Model name</span>
-          <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={120} />
+      <header className={styles.ribbonBar}>
+        <label className={styles.ribbonTitle}>
+          <span>Frame analysis · {projectName}</span>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={120} aria-label="Model name" placeholder="Name this model" />
         </label>
-        <div className={styles.topbarActions}>
-          <select aria-label="Load a saved project run" value="" onChange={(event) => openSavedRun(event.target.value)}>
-            <option value="">Open saved run · {history.length}</option>
-            {history.map((run) => (
-              <option key={run.id} value={run.id}>
+        <div className={styles.ribbon}>
+          <div className={styles.ribbonGroup}>
+            <div className={styles.ribbonButtons}>
+              <select aria-label="Open a saved project run" value="" onChange={(event) => openSavedRun(event.target.value)}>
+                <option value="">Open saved run ({history.length})</option>
+                {history.map((run) => (
+                  <option key={run.id} value={run.id}>
                     {run.title} · run {run.runSequence} · {new Date(run.createdAt).toLocaleDateString()}{run.superseded ? " · superseded" : ""}
-              </option>
-            ))}
-          </select>
-          <button type="button" onClick={() => stepHistory("undo")} disabled={!historyCounts.past} title="Undo (Ctrl+Z)" aria-label="Undo">↶ Undo</button>
-          <button type="button" onClick={() => stepHistory("redo")} disabled={!historyCounts.future} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷ Redo</button>
-          <button type="button" onClick={exportModel}>Export</button>
-          <button type="button" onClick={() => fileInput.current?.click()}>Import</button>
-          <input ref={fileInput} className={styles.fileInput} type="file" accept="application/json,.json" onChange={importModel} />
-          <button type="button" className={styles.runButton} disabled={!canRun || busy} onClick={runAnalysis}>
-            {busy ? "Solving…" : "Run analysis"}
-          </button>
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={() => fileInput.current?.click()}>Import</button>
+              <button type="button" onClick={exportModel}>Export</button>
+              <input ref={fileInput} className={styles.fileInput} type="file" accept="application/json,.json" onChange={importModel} />
+            </div>
+            <span>File</span>
+          </div>
+          <div className={styles.ribbonGroup}>
+            <div className={styles.ribbonButtons}>
+              <button type="button" onClick={() => stepHistory("undo")} disabled={!historyCounts.past} title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+              <button type="button" onClick={() => stepHistory("redo")} disabled={!historyCounts.future} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
+              <button type="button" onClick={loadSample} title="Replace the model with the demo beam">Demo</button>
+            </div>
+            <span>Edit</span>
+          </div>
+          <div className={styles.ribbonGroup}>
+            <div className={styles.ribbonButtons}>
+              <div className={styles.segmented} role="group" aria-label="Analysis method">
+                <button type="button" aria-pressed={analysisType === "linear"} className={analysisType === "linear" ? styles.segmentActive : styles.segment} onClick={() => setAnalysis("linear")}>Linear</button>
+                <button type="button" aria-pressed={analysisType === "p_delta"} className={analysisType === "p_delta" ? styles.segmentActive : styles.segment} onClick={() => setAnalysis("p_delta")}>P-Δ</button>
+              </div>
+              <label className={styles.liveSwitch} title="Re-solve automatically while editing (not saved)">
+                <input type="checkbox" checked={liveSolve} onChange={(event) => setLiveSolve(event.target.checked)} />
+                <span aria-hidden="true" />Live
+              </label>
+              <button type="button" className={styles.runButton} disabled={!canRun || busy || frameRunBlocked} onClick={runAnalysis}
+                title={canRun ? "Solve and save this model to the project" : "Only owners, admins and engineers can save analysis runs"}>
+                {busy ? "Saving…" : activeSavedRun ? "Save revision" : "Run & save"}
+              </button>
+            </div>
+            <span>Analysis</span>
+          </div>
         </div>
       </header>
 
@@ -1151,12 +1172,10 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
           {tab === "results" ? (
             <div className={styles.panelScroll}>
               <section className={styles.toolSection}>
-                <div className={styles.sectionTitle}><h3>Analysis method</h3></div>
-                <label className={styles.field}>Solver<select value={analysisType} onChange={(event) => setAnalysis(event.target.value as PyniteInputs["analysis_type"])}><option value="linear">Linear elastic</option><option value="p_delta">P-Delta · second order</option></select></label>
-                <button type="button" className={styles.runButtonWide} disabled={!canRun || busy || frameRunBlocked} onClick={runAnalysis}>{busy ? "Solving model…" : activeSavedRun ? "Save new frame revision" : "Run and save analysis"}</button>
+                <div className={styles.sectionTitle}><h3>Analysis</h3><span>{analysisType === "p_delta" ? "P-Δ second order" : "Linear elastic"} · {liveSolve ? "live" : "manual"}</span></div>
+                <p className={styles.helpText}>Change the method, live solving and saving from the Analysis group in the toolbar.</p>
                 {frameRunBlocked ? <p className={styles.helpText}>{windLinkErrors[0] ?? `Review a nonzero factor for wind load cases: ${unassignedWindCases.join(", ")}.`}</p> : null}
-                {!canRun ? <p className={styles.helpText}>Your project role can view the model, but only owners, admins, and engineers can run analysis.</p> : null}
-                <label className={styles.liveToggle}><input type="checkbox" checked={liveSolve} onChange={(event) => setLiveSolve(event.target.checked)} /> Live solve while editing (not saved)</label>
+                {!canRun ? <p className={styles.helpText}>Your project role can view the model, but only owners, admins, and engineers can save analysis runs.</p> : null}
                 {liveSolve && preview.status === "error" && !result ? <p className={styles.helpText}>{preview.error}</p> : null}
                 {liveSolve && !liveInputs ? <p className={styles.helpText}>Live solve starts once the model has a member, a support and a load combination.</p> : null}
               </section>

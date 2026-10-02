@@ -72,6 +72,7 @@ export default async function ProjectPage({
   const initialCalculationId = Array.isArray(query.calculation)
     ? query.calculation[0]
     : query.calculation;
+  const reviseCalculationId = Array.isArray(query.revise) ? query.revise[0] : query.revise;
   // Calculations with dedicated editors open as the page's main workspace; the frame
   // workbench has its own page.
   const focusedGuide = initialCalculationId && initialCalculationId !== FRAME_ANALYSIS_ID
@@ -482,7 +483,53 @@ export default async function ProjectPage({
         }}
       />
 
-      <section className="dashboard-workspace">
+      <section className="dashboard-workspace project-workspace">
+        <div className="project-layout">
+        <aside className="project-sidebar" aria-label="Project calculations">
+          <p className="project-sidebar-heading">New calculation</p>
+          <nav className="project-sidebar-tools">
+            {[
+              [WIND_ASSESSMENT_ID, "Wind assessment", "W"],
+              [FRAME_ANALYSIS_ID, "Frame analysis", "F"],
+              [AS3600_SECTION_ID, "Concrete section", "C"],
+              [AS4100_SECTION_ID, "Steel section · axial", "S"],
+            ].map(([id, title, glyph]) => (
+              <Link key={id} href={calculationWorkspaceHref(id, project.id)}
+                className={initialCalculationId === id && !reviseCalculationId ? "project-sidebar-link is-active" : "project-sidebar-link"}
+                aria-current={initialCalculationId === id && !reviseCalculationId ? "page" : undefined}>
+                <i aria-hidden="true">{glyph}</i>{title}<b aria-hidden="true">+</b>
+              </Link>
+            ))}
+            <Link href={`/dashboard/calculations?project=${encodeURIComponent(project.id)}`} className="project-sidebar-link is-muted">
+              <i aria-hidden="true">…</i>Browse library
+            </Link>
+          </nav>
+          <p className="project-sidebar-heading">In this project · {standaloneCalculations.length + (latestWorkflowId ? 1 : 0)}</p>
+          <nav className="project-sidebar-tree">
+            {latestWorkflowId ? (
+              <a href="#wind-review" className="project-sidebar-item"><span>Wind assessment</span><small>6-stage workflow</small></a>
+            ) : null}
+            {standaloneCalculations.map((calculation) => {
+              const guide = calculationGuide(calculation.calculation_definition_id);
+              const run = latestStandaloneRuns.get(calculation.id);
+              const stale = freshness.get(calculation.id)?.stale;
+              const href = calculation.calculation_definition_id === FRAME_ANALYSIS_ID
+                ? calculationWorkspaceHref(FRAME_ANALYSIS_ID, project.id)
+                : guide
+                  ? `/dashboard/projects/${encodeURIComponent(project.id)}?calculation=${encodeURIComponent(calculation.calculation_definition_id)}&revise=${encodeURIComponent(calculation.id)}#workspace`
+                  : `#calc-${calculation.id}`;
+              return (
+                <Link key={calculation.id} href={href}
+                  className={reviseCalculationId === calculation.id ? "project-sidebar-item is-active" : "project-sidebar-item"}>
+                  <span>{calculation.title}</span>
+                  <small>{guide?.title ?? calculation.calculation_definition_id.split(".").slice(-1)[0].replaceAll("_", " ")}{run ? ` · run ${run.run_sequence}` : ""}{stale ? " · needs update" : ""}</small>
+                </Link>
+              );
+            })}
+            {!standaloneCalculations.length && !latestWorkflowId ? <p className="project-sidebar-empty">Saved calculations will appear here.</p> : null}
+          </nav>
+        </aside>
+        <div className="project-main">
         <div className="dashboard-title-row">
           <div>
             <p className="eyebrow">
@@ -504,31 +551,14 @@ export default async function ProjectPage({
           <span>Standards region <b>{project.standards_region}</b></span>
         </div>
 
-        <nav className="project-tools" aria-label="Project calculation tools">
-          {[
-            [WIND_ASSESSMENT_ID, "Wind assessment", "AS/NZS 1170.2 site wind and frame loads"],
-            [FRAME_ANALYSIS_ID, "Frame analysis", "Draw a frame and solve it live"],
-            [AS3600_SECTION_ID, "Concrete section", "Bars, neutral axis and moment capacity"],
-            [AS4100_SECTION_ID, "Steel section · axial", "Tension and compression utilisation"],
-          ].map(([id, title, detail]) => (
-            <Link key={id} href={calculationWorkspaceHref(id, project.id)} className={focusedGuide && initialCalculationId === id ? "project-tool is-active" : "project-tool"}
-              aria-current={initialCalculationId === id ? "page" : undefined}>
-              <strong>{title}</strong>
-              <span>{detail}</span>
-            </Link>
-          ))}
-          <Link href={`/dashboard/calculations?project=${encodeURIComponent(project.id)}`} className="project-tool project-tool-more">
-            <strong>All calculations</strong>
-            <span>Browse the library</span>
-          </Link>
-        </nav>
 
         {focusedGuide && initialCalculationId ? (
           <section className="project-focused-calculation" id="workspace" aria-label={focusedGuide.title}>
             <CalculationLauncher
-              key={initialCalculationId}
+              key={`${initialCalculationId}:${reviseCalculationId ?? "new"}`}
               projectId={project.id}
               focusedCalculationId={initialCalculationId}
+              initialRevisionCalculationId={reviseCalculationId}
               heading={focusedGuide.title}
               sourceRuns={linkSourceRuns}
             />
@@ -536,6 +566,7 @@ export default async function ProjectPage({
         ) : null}
 
         {latestWorkflowId && workflowStages?.length === 6 ? (
+          <div id="wind-review" className="project-anchor">
           <WindWorkflowReview
             projectId={project.id}
             workflowInstanceId={latestWorkflowId}
@@ -546,6 +577,7 @@ export default async function ProjectPage({
             reports={reports}
             baseInputs={baseInputs}
           />
+          </div>
         ) : null}
 
         <details
@@ -588,7 +620,7 @@ export default async function ProjectPage({
               {standaloneCalculations.map((calculation) => {
                 const latestRun = latestStandaloneRuns.get(calculation.id);
                 return (
-                  <article className="calculation-result-card" key={calculation.id}>
+                  <article className="calculation-result-card" key={calculation.id} id={`calc-${calculation.id}`}>
                     <header>
                       <div>
                         <small>{calculation.calculation_definition_id} · Run {latestRun?.run_sequence ?? "—"}</small>
@@ -738,6 +770,8 @@ export default async function ProjectPage({
               </p>
             )}
           </section>
+        </div>
+        </div>
         </div>
       </section>
     </main>
