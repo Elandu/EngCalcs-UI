@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AS3600_SECTION_ID, AS4100_SECTION_ID, calculationDisplayName, calculationWorkspaceHref, FRAME_ANALYSIS_ID, WIND_ASSESSMENT_ID } from "@/lib/calculation-catalogue";
+import { AS3600_SECTION_ID, AS4100_SECTION_ID, calculationDisplayName, calculationGuide, calculationWorkspaceHref, FRAME_ANALYSIS_ID, WIND_ASSESSMENT_ID } from "@/lib/calculation-catalogue";
 import { useLivePreview } from "@/lib/use-live-preview";
 import {
   ConcreteSectionEditor,
@@ -62,6 +62,23 @@ function parseStructuralResult(value: unknown): StructuralResult | null {
 
 function isSectionCalculation(id?: string) {
   return id === AS3600_SECTION_ID || id === AS4100_SECTION_ID;
+}
+
+type Draft = { title: string; values: SchemaRecord };
+
+function draftKey(projectId: string, calculationId: string) {
+  return `opencalcs:calc-draft:${projectId}:${calculationId}`;
+}
+
+/** Unsaved section-editor inputs kept in this browser so a reload or navigation does not lose work. */
+function loadDraft(projectId: string, calculationId: string): Draft | null {
+  if (!isSectionCalculation(calculationId)) return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(draftKey(projectId, calculationId)) ?? "null");
+    return parsed && typeof parsed.title === "string" && isJsonObject(parsed.values) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 type LinkSourceRun = {
@@ -636,6 +653,7 @@ export function CalculationLauncher({
 }) {
   const router = useRouter();
   const outputHeadingId = useId();
+  const formId = useId();
   const [definitions, setDefinitions] = useState<CalculationDefinition[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [title, setTitle] = useState("");
@@ -669,17 +687,35 @@ export function CalculationLauncher({
           ? items.find((item) => item.id === focusedCalculationId)
           : items.find((item) => item.id === initialCalculationId) ?? items[0];
         if (initial) {
+          const draft = loadDraft(projectId, initial.id);
           setSelectedId(initial.id);
-          setTitle(initial.name);
-          setValues(makeInputValues(initial.input_schema));
+          setTitle(draft?.title ?? initial.name);
+          setValues(draft?.values ?? makeInputValues(initial.input_schema));
+          if (draft) setMessage("Restored your unsaved inputs from this browser.");
         }
       })
       .catch((error: Error) => { if (active) setMessage(error.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [initialCalculationId, focusedCalculationId]);
+  }, [initialCalculationId, focusedCalculationId, projectId]);
+
+  useEffect(() => {
+    if (!selectedId || !isSectionCalculation(selectedId) || revisionTarget || loading) return;
+    const timer = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(draftKey(projectId, selectedId), JSON.stringify({ title, values }));
+      } catch {
+        // Storage can be full or blocked; the form keeps working without a draft.
+      }
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [loading, projectId, revisionTarget, selectedId, title, values]);
 
   const selected = useMemo(() => definitions.find((item) => item.id === selectedId), [definitions, selectedId]);
+  const guide = calculationGuide(selected?.id);
+  const revisableRuns = sourceRuns.filter((run, index) => run.revisable &&
+    (!focusedCalculationId || run.calculationDefinitionId === focusedCalculationId) &&
+    sourceRuns.findIndex((other) => other.calculationId === run.calculationId) === index);
   const selectedSourceRun = sourceRuns.find((run) => run.runId === sourceRunId) ?? sourceRuns[0];
   const sourceOutputs = useMemo(
     () => selectedSourceRun
@@ -758,14 +794,29 @@ export function CalculationLauncher({
 
   function selectDefinition(nextId: string) {
     const next = definitions.find((item) => item.id === nextId);
+    const draft = loadDraft(projectId, nextId);
     setSelectedId(nextId);
-    setTitle(next?.name || "");
-    setValues(makeInputValues(next?.input_schema));
+    setTitle(draft?.title ?? next?.name ?? "");
+    setValues(draft?.values ?? makeInputValues(next?.input_schema));
     setLinkedInputs([]);
     setTargetInputPath("");
     setMessage("");
     setRevisionTarget(null);
     setSubmittedRun(null);
+  }
+
+  function clearInputs() {
+    try {
+      window.localStorage.removeItem(draftKey(projectId, selectedId));
+    } catch {
+      // Ignore unavailable storage.
+    }
+    setTitle(selected?.name ?? "");
+    setValues(makeInputValues(selected?.input_schema));
+    setLinkedInputs([]);
+    setRevisionTarget(null);
+    setSubmittedRun(null);
+    setMessage("Inputs cleared.");
   }
 
   function reviseRun(runId: string) {
@@ -928,31 +979,30 @@ export function CalculationLauncher({
     <section className="calculator-launcher" aria-labelledby={headingId}>
       <div className="launcher-heading">
         <div>
-          <p className="eyebrow">{focusedCalculationId ? "Wind calculation" : "Advanced calculations"}</p>
+          <p className="eyebrow">{guide ? guide.scope : focusedCalculationId ? "Wind calculation" : "Advanced calculations"}</p>
           <h2 id={headingId}>{heading ?? "Calculation components & links"}</h2>
-          {focusedCalculationId ? <p>{selected?.description ?? "This calculation requires the corresponding backend release before it can run."}</p> :
+          {focusedCalculationId ? <p>{guide?.summary ?? selected?.description ?? "This calculation requires the corresponding backend release before it can run."}</p> :
             <p>Run an individual component or link saved outputs into its inputs. For a complete wind assessment, <Link href={calculationWorkspaceHref(WIND_ASSESSMENT_ID, projectId)}>open Wind calculation</Link>.</p>}
         </div>
       </div>
 
       {!definitions.length || (focusedCalculationId && !selected) ? (
-        <p className="form-message">{message || (focusedCalculationId ? "This calculation is not available from the connected engine yet." : "No calculations are available.")}</p>
+        <p className="form-message">{message || (focusedCalculationId ? "This calculation is not installed in the connected engine yet. Ask your administrator to deploy it, or check back shortly." : "No calculations are available.")}</p>
       ) : (
-        <form className="calculator-form" onSubmit={run}>
+        <form className="calculator-form" id={formId} onSubmit={run}>
           <fieldset className="calculation-form-fields" disabled={busy}>
           <div className="calculation-workbench">
             <div className="calculation-input-pane">
-              <label>Revise a saved calculation
+              {revisableRuns.length ? <label>{guide ? "Open a saved version" : "Revise a saved calculation"}
                 <select value={revisionTarget?.calculationId ?? ""} disabled={busy} onChange={(event) => {
                   const latest = sourceRuns.filter((run) => run.calculationId === event.target.value)
                     .sort((a, b) => b.runSequence - a.runSequence)[0];
                   if (latest) reviseRun(latest.runId); else selectDefinition(selectedId);
                 }}>
                   <option value="">New calculation</option>
-                  {sourceRuns.filter((run, index) => run.revisable && (!focusedCalculationId || run.calculationDefinitionId === focusedCalculationId) && sourceRuns.findIndex((other) => other.calculationId === run.calculationId) === index)
-                    .map((run) => <option key={run.calculationId} value={run.calculationId}>{run.title} · Run {run.runSequence}</option>)}
+                  {revisableRuns.map((run) => <option key={run.calculationId} value={run.calculationId}>{run.title} · Run {run.runSequence}</option>)}
                 </select>
-              </label>
+              </label> : null}
               {!focusedCalculationId ? <label>
                 Calculation
                 <select value={selectedId} onChange={(event) => selectDefinition(event.target.value)}>
@@ -962,7 +1012,11 @@ export function CalculationLauncher({
 
               {selected?.id === FRAME_ANALYSIS_ID ? <p className="form-message"><Link href={calculationWorkspaceHref(FRAME_ANALYSIS_ID, projectId)}>Open Frame analysis</Link> to edit the model visually and review force and deflection diagrams.</p> : null}
 
-              {selected ? (
+              {selected && guide ? (
+                <div className="definition-note">
+                  <p>{guide.limits}</p>
+                </div>
+              ) : selected ? (
                 <div className="definition-note">
                   <strong>{selected.standard?.name || "Engineering calculation"}</strong>
                   <span>{selected.standard?.edition ? ` · ${selected.standard.edition}` : ""}</span>
@@ -970,10 +1024,13 @@ export function CalculationLauncher({
                 </div>
               ) : null}
 
-              <label>
-                Calculation title
-                <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required />
-              </label>
+              <div className="calculation-title-row">
+                <label>
+                  Calculation title
+                  <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required placeholder="e.g. Level 2 transfer beam B4" />
+                </label>
+                {isSectionCalculation(selected?.id) && !revisionTarget ? <button type="button" className="button button-secondary button-small" onClick={clearInputs}>Clear inputs</button> : null}
+              </div>
 
               {selected?.id === AS3600_SECTION_ID ? (
                 <ConcreteSectionEditor
@@ -1001,6 +1058,8 @@ export function CalculationLauncher({
               </div>}
               {isSectionCalculation(selected?.id) && linkedInputs.length ? <p className="form-message">Linked inputs are locked. Remove the links to edit the section visually.</p> : null}
 
+              <details className="calculation-link-disclosure" open={!guide || linkedInputs.length > 0 || undefined}>
+              <summary>Link a value from another saved calculation <span>{linkedInputs.length ? `${linkedInputs.length} linked` : "optional"}</span></summary>
               <section className="calculation-link-builder" aria-labelledby="calculation-link-title">
                 {revisionTarget && linkedInputs.length ? <button type="button" className="button button-secondary" disabled={busy} onClick={refreshLinkedSources}>Use latest source runs</button> : null}
                 <div className="calculation-link-builder-heading">
@@ -1075,6 +1134,7 @@ export function CalculationLauncher({
                 ) : null}
                 <p className="calculation-link-note">The selected source run is immutable. The server resolves it again, validates structured values and units, and records the exact run provenance. No unit conversion is implicit.</p>
               </section>
+              </details>
 
               <div className="form-actions">
                 <button className="button button-primary" type="submit" disabled={busy || !selected?.input_schema}>
@@ -1109,7 +1169,12 @@ export function CalculationLauncher({
                       {preview.result.kind === "concrete" ? <ConcreteSectionResults result={preview.result.value} /> : <SteelAxialResults result={preview.result.value} />}
                     </div>
                   ) : null}
-                  <p className="calculation-output-note">Previews run the same engine without saving. Use Run &amp; save to create the project record.</p>
+                  {preview.current ? (
+                    <button type="submit" form={formId} className="button button-primary live-preview-save" disabled={busy}>
+                      {busy ? "Saving…" : revisionTarget ? "Save as new revision" : "Save this result to the project"}
+                    </button>
+                  ) : null}
+                  <p className="calculation-output-note">Previews run the same engine without saving. Saving records the inputs, result and engine version in the project history.</p>
                 </div>
               ) : null}
               <div className="calculation-output-heading">

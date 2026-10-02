@@ -134,3 +134,12 @@
   .barHead, .barRow, .barRowSelected { grid-template-columns: minmax(48px, 0.8fr) repeat(3, minmax(56px, 1fr)) 32px; }
   .barHead span:nth-child(5), .barRow span, .barRowSelected span { display: none; }
 }
+
+.steps { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 0; padding: 0; counter-reset: step; list-style: none; color: var(--se-muted); font-size: 12px; }
+.steps li { counter-increment: step; }
+.steps li::before { content: counter(step); display: inline-grid; place-items: center; width: 16px; height: 16px; margin-right: 5px; border-radius: 50%; background: #e7f5eb; color: var(--se-green); font-size: 10px; font-weight: 800; }
+.emptyCanvasHint { fill: var(--se-muted); font-size: 11px; }
+.textButton { justify-self: start; border: 0; background: none; padding: 0; color: var(--se-warn); font-size: 12px; font-weight: 700; cursor: pointer; }
+.textButton:hover { text-decoration: underline; }
+.chip:disabled { cursor: not-allowed; opacity: 0.5; }
+.sectionCanvas:focus-visible { outline: 3px solid #0f5b4366; outline-offset: -3px; }

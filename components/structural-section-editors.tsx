@@ -90,6 +90,18 @@ export const CONCRETE_SECTION_EXAMPLE: Values = {
 };
 
 const SNAP_MM = 5;
+/** Common reinforcing bar diameters, offered as shortcuts; any diameter can still be typed. */
+const BAR_SIZES = [10, 12, 16, 20, 24, 28, 32, 36];
+
+function BarSizeChips({ value, onPick, disabled }: { value: string; onPick: (size: string) => void; disabled?: boolean }) {
+  return (
+    <div className={styles.chips} role="group" aria-label="Common bar diameters">
+      {BAR_SIZES.map((size) => (
+        <button type="button" key={size} disabled={disabled} className={Number(value) === size ? styles.chipActive : styles.chip} onClick={() => onPick(String(size))}>Ø{size}</button>
+      ))}
+    </div>
+  );
+}
 
 export function ConcreteSectionEditor({ values, onChange, result, resultCurrent, disabled }: {
   values: Values;
@@ -187,6 +199,12 @@ export function ConcreteSectionEditor({ values, onChange, result, resultCurrent,
         <div>
           <p className={styles.kicker}>Section model</p>
           <h3>Rectangular reinforced concrete section</h3>
+          <ol className={styles.steps}>
+            <li>Set width and depth</li>
+            <li>Add bar layers or click to place bars</li>
+            <li>Enter material coefficients</li>
+            <li>Read the result on the right, then save</li>
+          </ol>
         </div>
         <button type="button" className={styles.ghostButton} disabled={disabled} onClick={() => { onChange(structuredClone(CONCRETE_SECTION_EXAMPLE)); setSelectedBar(null); }}>
           Load illustrative example
@@ -205,6 +223,16 @@ export function ConcreteSectionEditor({ values, onChange, result, resultCurrent,
             onPointerMove={onCanvasPointerMove}
             onPointerUp={() => { drag.current = null; }}
             onPointerCancel={() => { drag.current = null; }}
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if ((event.key === "Delete" || event.key === "Backspace") && selectedBar !== null && !disabled) {
+                event.preventDefault();
+                setBars(bars.filter((_, index) => index !== selectedBar));
+                setSelectedBar(null);
+              } else if (event.key === "Escape") {
+                setSelectedBar(null);
+              }
+            }}
           >
             {validShape ? <>
               <defs>
@@ -246,12 +274,15 @@ export function ConcreteSectionEditor({ values, onChange, result, resultCurrent,
                 <text x={-pad * 0.6} y={depth / 2} textAnchor="middle" transform={`rotate(-90 ${-pad * 0.6} ${depth / 2})`}>{fmt(depth, 0)} mm</text>
                 <text x={-pad * 0.9} y={depth + pad * 0.9} className={styles.origin}>origin (0, 0)</text>
               </g>
-            </> : <text x="200" y="150" textAnchor="middle" className={styles.emptyCanvas}>Enter a positive width and depth</text>}
+            </> : <>
+              <text x="200" y="140" textAnchor="middle" className={styles.emptyCanvas}>Enter a width and depth to draw the section</text>
+              <text x="200" y="164" textAnchor="middle" className={styles.emptyCanvasHint}>or use “Load illustrative example” above</text>
+            </>}
           </svg>
           <figcaption className={styles.canvasLegend}>
             <label className={styles.placeField}>Click to place Ø
               <input type="number" min={0} step="any" value={placeDiameter} onChange={(event) => setPlaceDiameter(event.target.value)} aria-label="Diameter of bars placed by clicking" disabled={disabled} />
-              mm bars · drag to move (5 mm snap)
+              mm bars · drag to move · Delete removes the selected bar
             </label>
             {overlay ? <span><i className={styles.legendZone} /> compression zone {resultCurrent ? "" : "(previous inputs)"}</span> : null}
             {centroid ? <span><i className={styles.legendCentroid} /> elastic centroid</span> : null}
@@ -287,15 +318,17 @@ export function ConcreteSectionEditor({ values, onChange, result, resultCurrent,
 
       <fieldset className={styles.group} disabled={disabled}>
         <legend>Reinforcement · {bars.length} bars · As = {fmt(steelArea, 0)} mm²{validShape ? ` · ${fmt((100 * steelArea) / (width * depth), 2)}% of gross` : ""}</legend>
+        {bars.length ? <button type="button" className={styles.textButton} onClick={() => { setBars([]); setSelectedBar(null); }}>Remove all bars</button> : null}
         <div className={styles.layerTools}>
           <NumberField label="Bars" value={layer.count} step="1" min={1} onChange={(value) => setLayer({ ...layer, count: value })} />
-          <NumberField label="Bar Ø" unit="mm" value={layer.diameter} min={0} onChange={(value) => setLayer({ ...layer, diameter: value })} />
+          <NumberField label="Bar Ø" unit="mm" value={layer.diameter} min={0} onChange={(value) => { setLayer({ ...layer, diameter: value }); setPlaceDiameter(value); }} />
           <NumberField label="Face to bar centre" unit="mm" value={layer.edge} min={0} onChange={(value) => setLayer({ ...layer, edge: value })} />
           <label className={styles.field}><span>Face</span>
             <select value={layer.face} onChange={(event) => setLayer({ ...layer, face: event.target.value as "top" | "bottom" })}><option value="bottom">Bottom</option><option value="top">Top</option></select>
           </label>
           <button type="button" className={styles.secondaryButton} onClick={addLayer} disabled={!validShape}>Add layer</button>
         </div>
+        <BarSizeChips value={layer.diameter} disabled={disabled} onPick={(size) => { setLayer({ ...layer, diameter: size }); setPlaceDiameter(size); }} />
         <p className={styles.note}>Ø is converted to area as πØ²/4. Bars are placed at the entered centre distance from both side faces and the chosen face; check cover separately.</p>
         <div className={styles.barTable} role="table" aria-label="Reinforcing bars">
           <div className={styles.barHead} role="row"><span>ID</span><span>Area mm²</span><span>x mm</span><span>y mm</span><span>Ø eq.</span><span /></div>

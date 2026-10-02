@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Brand } from "@/components/brand";
+import { WorkspaceHeader } from "@/components/workspace-header";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -35,10 +35,10 @@ export default async function StructuralProjectsPage() {
 
   return (
     <main className="dashboard-shell">
-      <header className="dashboard-header">
-        <Brand />
-        <Link href="/dashboard">Back to workspace</Link>
-      </header>
+      <WorkspaceHeader
+        area="structural"
+        canManageApiKeys={(memberships ?? []).some((item) => item.role === "owner" || item.role === "admin")}
+      />
       <section className="dashboard-workspace">
         <div className="dashboard-title-row">
           <div>

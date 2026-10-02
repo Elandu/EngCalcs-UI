@@ -44,14 +44,66 @@ export type CatalogueDefinition = {
   };
 };
 
+export type CalculationGuide = {
+  /** Short name used on cards, buttons and headings. */
+  title: string;
+  /** Library grouping shown to users. */
+  category: string;
+  /** Honest scope label; never implies a compliance check the engine does not perform. */
+  scope: string;
+  summary: string;
+  needs: string[];
+  gives: string[];
+  limits: string;
+};
+
+/** Plain-language guidance for calculations with dedicated workspaces. */
+export const CALCULATION_GUIDES: Record<string, CalculationGuide> = {
+  [FRAME_ANALYSIS_ID]: {
+    title: "Frame analysis",
+    category: "Structural analysis",
+    scope: "PyNite 3D frame solver",
+    summary: "Draw a 2D or 3D frame, apply loads and see deflections, reactions and force diagrams update as you edit.",
+    needs: ["Node coordinates and member connections", "Supports (restrained directions)", "Section and material stiffness", "Load cases and combination factors"],
+    gives: ["Deformed shape and reactions", "Bending, shear and axial diagrams", "Saved runs with linked wind loads"],
+    limits: "Elastic analysis results only; member design checks are separate.",
+  },
+  [AS3600_SECTION_ID]: {
+    title: "Concrete section",
+    category: "Structural sections",
+    scope: "Section mechanics · AS 3600 checks not yet included",
+    summary: "Draw a rectangular reinforced concrete section, place bars and see its nominal bending capacity and neutral axis.",
+    needs: ["Section width and depth", "Bar sizes and positions", "Concrete stress-block coefficients", "Reinforcement yield strength", "Axial force and bending direction"],
+    gives: ["Nominal moment capacity (Mx, My)", "Neutral-axis depth and steel strain", "Gross section properties and centroid"],
+    limits: "Nominal capacity only. No capacity reduction factor or AS 3600 compliance check is applied.",
+  },
+  [AS4100_SECTION_ID]: {
+    title: "Steel section · axial",
+    category: "Structural sections",
+    scope: "AS 4100:2020 · section axial capacity",
+    summary: "Check a steel section's tension and compression section capacity against design actions, with utilisation shown live.",
+    needs: ["Gross and net areas", "Yield and tensile strength for the product", "Assessed kt and kf factors", "Factored tension and compression actions"],
+    gives: ["Design capacities φNt and φNs", "Utilisation and governing mode", "Gross yielding and net fracture capacities"],
+    limits: "Section capacity only. Member buckling, bending, shear and connections are not checked.",
+  },
+};
+
+export function calculationGuide(id?: string): CalculationGuide | undefined {
+  return id ? CALCULATION_GUIDES[id] : undefined;
+}
+
 export function calculationDisplayName(id: string, name: string) {
-  return id === FRAME_ANALYSIS_ID ? "Frame analysis" : name;
+  return CALCULATION_GUIDES[id]?.title ?? name;
 }
 
 export function calculationCatalogue(definitions: CatalogueDefinition[]): CatalogueDefinition[] {
   const wind = definitions.find((item) => windComponentIds.has(item.id));
   const entries = definitions.filter((item) => !windComponentIds.has(item.id))
-    .map((item) => ({ ...item, name: calculationDisplayName(item.id, item.name) }));
+    .map((item) => ({
+      ...item,
+      name: calculationDisplayName(item.id, item.name),
+      category: CALCULATION_GUIDES[item.id]?.category ?? item.category,
+    }));
   if (wind) entries.unshift({
     id: WIND_ASSESSMENT_ID,
     name: "Wind calculation",
@@ -77,7 +129,7 @@ export function calculationCatalogue(definitions: CatalogueDefinition[]): Catalo
 export function calculationWorkspaceHref(id: string, projectId: string) {
   const project = encodeURIComponent(projectId);
   if (id === FRAME_ANALYSIS_ID) return `/dashboard/structural-fea/${project}`;
-  const anchor = isWindWorkspaceCalculation(id) ? "add-calculation" : "calculations";
+  const anchor = isWindWorkspaceCalculation(id) ? "add-calculation" : CALCULATION_GUIDES[id] ? "workspace" : "calculations";
   return `/dashboard/projects/${project}?calculation=${encodeURIComponent(id)}#${anchor}`;
 }
 

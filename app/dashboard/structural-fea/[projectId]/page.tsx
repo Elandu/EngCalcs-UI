@@ -1,10 +1,9 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { Brand } from "@/components/brand";
 import { PyniteWorkbench } from "@/components/pynite-workbench";
 import { revisionStatuses, type RevisionRun } from "@/lib/calculation-revisions";
 import { WIND_FRAME_LOADS_DEFINITION } from "@/lib/frame-wind-links";
+import { WorkspaceHeader } from "@/components/workspace-header";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +31,7 @@ export default async function StructuralProjectPage({ params }: PageProps) {
 
   const { data: project, error: projectError } = await supabase
     .from("projects")
-    .select("id, name, organisation_id")
+    .select("id, name, project_number, organisation_id")
     .eq("id", projectId)
     .in("organisation_id", organisationIds)
     .maybeSingle();
@@ -148,10 +147,11 @@ export default async function StructuralProjectPage({ params }: PageProps) {
 
   return (
     <main className="dashboard-shell">
-      <header className="dashboard-header">
-        <Brand />
-        <Link href="/dashboard/structural-fea">Back to structural projects</Link>
-      </header>
+      <WorkspaceHeader
+        area="structural"
+        canManageApiKeys={membership.role === "owner" || membership.role === "admin"}
+        currentProject={{ id: project.id, name: project.name, projectNumber: project.project_number }}
+      />
       <section className="dashboard-workspace">
         <PyniteWorkbench
           projectId={project.id}
