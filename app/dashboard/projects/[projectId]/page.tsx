@@ -7,7 +7,17 @@ import { WindWorkflowReview } from "@/components/wind-workflow-review";
 import { WorkspaceHeader } from "@/components/workspace-header";
 import { createClient } from "@/lib/supabase/server";
 import { authPageHref } from "@/lib/safe-auth-redirect";
-import { calculationWorkspaceHref, isWindWorkspaceCalculation } from "@/lib/calculation-catalogue";
+import Link from "next/link";
+
+import {
+  AS3600_SECTION_ID,
+  AS4100_SECTION_ID,
+  calculationGuide,
+  calculationWorkspaceHref,
+  FRAME_ANALYSIS_ID,
+  isWindWorkspaceCalculation,
+  WIND_ASSESSMENT_ID,
+} from "@/lib/calculation-catalogue";
 import { revisionStatuses, type RevisionRun } from "@/lib/calculation-revisions";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +72,11 @@ export default async function ProjectPage({
   const initialCalculationId = Array.isArray(query.calculation)
     ? query.calculation[0]
     : query.calculation;
+  // Calculations with dedicated editors open as the page's main workspace; the frame
+  // workbench has its own page.
+  const focusedGuide = initialCalculationId && initialCalculationId !== FRAME_ANALYSIS_ID
+    ? calculationGuide(initialCalculationId)
+    : undefined;
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub;
@@ -476,9 +491,9 @@ export default async function ProjectPage({
             <h1>{project.name}</h1>
             <p>{project.address || "No site address set"}</p>
           </div>
-          <a className="button button-primary" href="#add-calculation">
+          <Link className="button button-primary" href={calculationWorkspaceHref(WIND_ASSESSMENT_ID, project.id)}>
             New Wind assessment
-          </a>
+          </Link>
         </div>
 
         <div className="project-meta-strip">
@@ -488,6 +503,37 @@ export default async function ProjectPage({
           <span>Role <b>{membership.role}</b></span>
           <span>Standards region <b>{project.standards_region}</b></span>
         </div>
+
+        <nav className="project-tools" aria-label="Project calculation tools">
+          {[
+            [WIND_ASSESSMENT_ID, "Wind assessment", "AS/NZS 1170.2 site wind and frame loads"],
+            [FRAME_ANALYSIS_ID, "Frame analysis", "Draw a frame and solve it live"],
+            [AS3600_SECTION_ID, "Concrete section", "Bars, neutral axis and moment capacity"],
+            [AS4100_SECTION_ID, "Steel section · axial", "Tension and compression utilisation"],
+          ].map(([id, title, detail]) => (
+            <Link key={id} href={calculationWorkspaceHref(id, project.id)} className={focusedGuide && initialCalculationId === id ? "project-tool is-active" : "project-tool"}
+              aria-current={initialCalculationId === id ? "page" : undefined}>
+              <strong>{title}</strong>
+              <span>{detail}</span>
+            </Link>
+          ))}
+          <Link href={`/dashboard/calculations?project=${encodeURIComponent(project.id)}`} className="project-tool project-tool-more">
+            <strong>All calculations</strong>
+            <span>Browse the library</span>
+          </Link>
+        </nav>
+
+        {focusedGuide && initialCalculationId ? (
+          <section className="project-focused-calculation" id="workspace" aria-label={focusedGuide.title}>
+            <CalculationLauncher
+              key={initialCalculationId}
+              projectId={project.id}
+              focusedCalculationId={initialCalculationId}
+              heading={focusedGuide.title}
+              sourceRuns={linkSourceRuns}
+            />
+          </section>
+        ) : null}
 
         {latestWorkflowId && workflowStages?.length === 6 ? (
           <WindWorkflowReview
@@ -504,9 +550,9 @@ export default async function ProjectPage({
 
         <details
           className={latestWorkflowId ? "new-assessment-disclosure" : ""}
-          open={!latestWorkflowId || isWindWorkspaceCalculation(initialCalculationId)}
+          open={isWindWorkspaceCalculation(initialCalculationId) || (!latestWorkflowId && !initialCalculationId)}
         >
-          {latestWorkflowId ? <summary>Start another Wind assessment</summary> : null}
+          {latestWorkflowId || initialCalculationId ? <summary>{latestWorkflowId ? "Start another Wind assessment" : "Start a Wind assessment"}</summary> : null}
           <WindCalculationWorkspace key={initialCalculationId ?? "wind"} projectId={project.id}
             initialCalculationId={initialCalculationId} sourceRuns={linkSourceRuns}>
           <WindSiteWorkflow
@@ -520,12 +566,12 @@ export default async function ProjectPage({
         <details
           className="project-calculation-disclosure"
           id="calculations"
-          open={Boolean(initialCalculationId) && !isWindWorkspaceCalculation(initialCalculationId)}
+          open={Boolean(initialCalculationId) && !isWindWorkspaceCalculation(initialCalculationId) && !focusedGuide}
         >
           <summary>Advanced · individual calculation components and links</summary>
           <CalculationLauncher
             projectId={project.id}
-            initialCalculationId={initialCalculationId}
+            initialCalculationId={focusedGuide ? undefined : initialCalculationId}
             sourceRuns={linkSourceRuns}
           />
         </details>

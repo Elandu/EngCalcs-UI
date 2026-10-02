@@ -75,6 +75,11 @@ function previewableModel(model: FrameModel) {
     model.nodes.every((node) => [node.x_m, node.y_m, node.z_m].every(Number.isFinite));
 }
 
+/** Wall-clock time for coalescing undo steps; only called from event handlers. */
+function currentTime() {
+  return Date.now();
+}
+
 function nextId(prefix: string, values: string[]) {
   const used = new Set(values);
   let index = 1;
@@ -172,6 +177,10 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
   const [overlay, setOverlay] = useState<CanvasOverlay>("deformed");
   const [magnifier, setMagnifier] = useState(1);
   const [viewportMode, setViewportMode] = useState<ViewportMode>("model");
+  const undoHistory = useRef<{ past: FrameModel[]; future: FrameModel[]; lastKey: string; lastAt: number }>({ past: [], future: [], lastKey: "", lastAt: 0 });
+  const [historyCounts, setHistoryCounts] = useState({ past: 0, future: 0 });
+  const [showTip, setShowTip] = useState(false);
+  const [selectionKind, setSelectionKind] = useState<"node" | "member">("member");
   const fileInput = useRef<HTMLInputElement>(null);
   const model = inputs.model;
   const selectedNodeRow = model.nodes.find((node) => node.id === selectedNode) ?? model.nodes[0];
@@ -272,6 +281,26 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     }
   }, [activeSavedRun, analysisType, hydrated, inputs, projectId, title, windSourceLink]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        setShowTip(window.localStorage.getItem("opencalcs:pynite:tip-dismissed") !== "1");
+      } catch {
+        setShowTip(true);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  function dismissTip() {
+    setShowTip(false);
+    try {
+      window.localStorage.setItem("opencalcs:pynite:tip-dismissed", "1");
+    } catch {
+      // Storage unavailable; the tip simply returns next visit.
+    }
+  }
+
   const exactWindSource = windSourceLink
     ? windRuns.find((run) => run.id === windSourceLink.sourceRunId && run.calculationId === windSourceLink.sourceCalculationId)
     : undefined;
@@ -304,6 +333,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
       const applied = applyWindSource({ ...inputs, analysis_type: analysisType }, source);
       analysisRevision.current += 1;
       setInputs(applied.inputs);
+      resetHistory();
       setWindSourceLink(applied.link);
       setActiveSavedRun((current) => current ? { ...current, stale: false, staleReasons: [] } : current);
       setWindRunSelection(source.id);
@@ -326,18 +356,66 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     setMessage("Wind provenance detached. The displayed distributed loads remain as a manual snapshot.");
   }
 
-  function updateModel(update: (current: FrameModel) => FrameModel) {
+  function linkedLoadsChanged(next: FrameModel, current: FrameModel) {
+    return Boolean(windSourceLink) &&
+      JSON.stringify(next.member_distributed_loads) !== JSON.stringify(current.member_distributed_loads);
+  }
+
+  /**
+   * Applies an edit and records the previous model for undo. Rapid edits sharing a
+   * `coalesce` key (a node drag) collapse into one undo step.
+   */
+  function updateModel(update: (current: FrameModel) => FrameModel, coalesce?: string) {
+    const nextModel = update(inputs.model);
+    if (nextModel === inputs.model) return;
+    if (linkedLoadsChanged(nextModel, inputs.model)) {
+      setMessage("These distributed loads are linked to a saved wind run. Unlink the wind source before editing or removing them.");
+      return;
+    }
+    const history = undoHistory.current;
+    const now = currentTime();
+    if (!coalesce || coalesce !== history.lastKey || now - history.lastAt > 800) {
+      history.past = [...history.past.slice(-99), inputs.model];
+    }
+    history.future = [];
+    history.lastKey = coalesce ?? "";
+    history.lastAt = now;
+    setHistoryCounts({ past: undoHistory.current.past.length, future: undoHistory.current.future.length });
     analysisRevision.current += 1;
     setAxisReviewConfirmed(false);
-    setInputs((current) => {
-      const nextModel = update(current.model);
-      if (windSourceLink && JSON.stringify(nextModel.member_distributed_loads) !== JSON.stringify(current.model.member_distributed_loads)) {
-        setMessage("These distributed loads are linked to a saved wind run. Unlink the wind source before editing or removing them.");
-        return current;
-      }
-      return { ...current, model: nextModel };
-    });
+    setInputs({ ...inputs, model: nextModel });
     setResult(null);
+  }
+
+  function resetHistory() {
+    undoHistory.current = { past: [], future: [], lastKey: "", lastAt: 0 };
+    setHistoryCounts({ past: undoHistory.current.past.length, future: undoHistory.current.future.length });
+  }
+
+  function stepHistory(direction: "undo" | "redo") {
+    const history = undoHistory.current;
+    const source = direction === "undo" ? history.past : history.future;
+    const target = source[source.length - 1];
+    if (!target) return;
+    if (linkedLoadsChanged(target, inputs.model)) {
+      setMessage("This step changes wind-linked loads. Unlink the wind source before undoing it.");
+      return;
+    }
+    if (direction === "undo") {
+      history.past = history.past.slice(0, -1);
+      history.future = [...history.future, inputs.model];
+    } else {
+      history.future = history.future.slice(0, -1);
+      history.past = [...history.past, inputs.model];
+    }
+    history.lastKey = "";
+    setHistoryCounts({ past: undoHistory.current.past.length, future: undoHistory.current.future.length });
+    analysisRevision.current += 1;
+    setInputs({ ...inputs, model: target });
+    setResult(null);
+    if (!target.nodes.some((node) => node.id === selectedNode)) setSelectedNode(target.nodes[0]?.id ?? "");
+    if (!target.members.some((member) => member.id === selectedMember)) setSelectedMember(target.members[0]?.id ?? "");
+    setMessage(direction === "undo" ? "Undid the last change." : "Redid the change.");
   }
 
   function addNode() {
@@ -416,7 +494,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     updateModel((current) => ({
       ...current,
       nodes: current.nodes.map((node) => node.id === id ? { ...node, x_m: position[0], y_m: position[1], z_m: position[2] } : node),
-    }));
+    }), `move:${id}`);
   }
 
   function addNodeAt(position: Vec3) {
@@ -453,7 +531,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     updateModel((current) => ({
       ...current,
       nodes: current.nodes.map((node) => node.id === id ? { ...node, [field]: numericValue } : node),
-    }));
+    }), `node:${id}:${field}`);
   }
 
   function toggleSupportDof(dof: "dx" | "dy" | "dz" | "rx" | "ry" | "rz", checked: boolean) {
@@ -561,7 +639,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
       materials: current.materials.map((material) => material.id === id
         ? { ...material, [field]: numericValue }
         : material),
-    }));
+    }), `material:${id}:${field}`);
   }
 
   function updateSection(id: string, field: keyof Omit<FrameModel["sections"][number], "id">, value: string) {
@@ -571,7 +649,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
       sections: current.sections.map((section) => section.id === id
         ? { ...section, [field]: numericValue }
         : section),
-    }));
+    }), `section:${id}:${field}`);
   }
 
   function addMaterial() {
@@ -621,7 +699,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
       load_combinations: current.load_combinations.map((combo) => combo.id === comboId
         ? { ...combo, factors: { ...combo.factors, [caseId]: factor } }
         : combo),
-    }));
+    }), `factor:${comboId}:${caseId}`);
   }
 
   function setAnalysis(value: PyniteInputs["analysis_type"]) {
@@ -723,6 +801,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     analysisRevision.current += 1;
     setTitle(run.title);
     setInputs(savedInputs);
+    resetHistory();
     setAnalysisType(savedInputs.analysis_type);
     setActiveSavedRun({ id: run.id, calculationId: run.calculationId, runSequence: run.runSequence, stale: run.stale, staleReasons: run.staleReasons, superseded: run.superseded });
     setWindSourceLink(restoredWindLink);
@@ -762,6 +841,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
       setActiveSavedRun(null);
       setWindSourceLink(null);
       setInputs(normalizedInputs);
+      resetHistory();
       setAnalysisType(normalizedInputs.analysis_type);
       if (typeof parsed.title === "string") setTitle(parsed.title);
       setResult(null);
@@ -778,6 +858,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     analysisRevision.current += 1;
     const sample = structuredClone(SAMPLE_FRAME_INPUTS);
     setInputs(sample);
+    resetHistory();
     setTitle("Simply supported beam");
     setAnalysisType("linear");
     setActiveSavedRun(null);
@@ -786,6 +867,29 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     setResult(null);
     setMessage("Loaded the six-metre demo beam. This example uses illustrative section properties.");
   }
+
+  // Keyboard shortcuts, re-bound each render so handlers see current state. Typing in a
+  // form field is never intercepted.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.closest("input, textarea, select, [contenteditable='true']"))) return;
+      const mod = event.ctrlKey || event.metaKey;
+      if (mod && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        stepHistory(event.shiftKey ? "redo" : "undo");
+      } else if (mod && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        stepHistory("redo");
+      } else if ((event.key === "Delete" || event.key === "Backspace") && !mod) {
+        event.preventDefault();
+        if (selectionKind === "node") removeSelectedNode();
+        else removeSelectedMember();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   const diagramChoices: Array<{ value: ResultKind; label: string; unit: string }> = [
     { value: "moment_z_knm", label: "BMD · Mz local axis", unit: "kN·m" },
@@ -817,6 +921,8 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
               </option>
             ))}
           </select>
+          <button type="button" onClick={() => stepHistory("undo")} disabled={!historyCounts.past} title="Undo (Ctrl+Z)" aria-label="Undo">↶ Undo</button>
+          <button type="button" onClick={() => stepHistory("redo")} disabled={!historyCounts.future} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷ Redo</button>
           <button type="button" onClick={exportModel}>Export</button>
           <button type="button" onClick={() => fileInput.current?.click()}>Import</button>
           <input ref={fileInput} className={styles.fileInput} type="file" accept="application/json,.json" onChange={importModel} />
@@ -1121,6 +1227,13 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
               </span>
             </div>
           </div>
+          {showTip ? (
+            <div className={styles.tipBar} role="note">
+              <strong>Quick start</strong>
+              <span>Choose <b>Elevation X–Y</b>, then <b>Add node</b> and <b>Draw member</b> to build the frame. Results update live as you edit. <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes, <kbd>Delete</kbd> removes the selection.</span>
+              <button type="button" onClick={dismissTip}>Got it</button>
+            </div>
+          ) : null}
           {viewportMode === "diagrams" ? (
             <div className={styles.resultsCanvas}>
               {shownResult ? <>
@@ -1148,8 +1261,8 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
             overlay={shownResult ? overlay : "none"}
             magnifier={magnifier}
             editable
-            onSelectNode={setSelectedNode}
-            onSelectMember={(id) => { setSelectedMember(id); if (tab !== "results") setTab("model"); }}
+            onSelectNode={(id) => { setSelectedNode(id); setSelectionKind("node"); }}
+            onSelectMember={(id) => { setSelectedMember(id); setSelectionKind("member"); if (tab !== "results") setTab("model"); }}
             onMoveNode={moveNode}
             onAddNode={addNodeAt}
             onConnect={connectNodes}
