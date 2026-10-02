@@ -269,7 +269,7 @@ No production data or schema was changed during this review.
   `localhost`, matching the documented allowlist. One Starlette/httpx deprecation warning remains.
 - The actual PyNite plugin passed all **5 analytical fixtures** again. Stabileo's earlier
   reproduced P-Delta reaction failure remains unresolved; no solver switch is proposed.
-- All three repositories were fetched before preparing `codex/wind-frame-foundation`
+- All three repositories were fetched before preparing coordinated wind-frame
   branches. OpenWind is committed as `d0a3ae2615241f932b93cf93ae8324142a446177`.
   OpenCalcs is committed as `b40d4faf76bb1b849dba909a71f91f5748d2fece` and now pins that
   exact OpenWind commit in `requirements-render.txt`. These are review branches; remote
