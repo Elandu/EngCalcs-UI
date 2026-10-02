@@ -25,10 +25,25 @@ function fmt(value: number, digits = 1) {
   return Number.isFinite(value) ? value.toLocaleString("en-AU", { maximumFractionDigits: digits }) : "—";
 }
 
-function NumberField({ label, unit, value, onChange, hint, min, max, step = "any", disabled }: {
-  label: string; unit?: string; value: unknown; onChange: (next: string) => void; hint?: string;
-  min?: number; max?: number; step?: string; disabled?: boolean;
+/**
+ * Calculation-sheet row: name, symbol, value and unit on one line, so inputs read like a
+ * hand calculation. `compact` keeps the stacked style for inline toolbars.
+ */
+function NumberField({ label, symbol, unit, value, onChange, hint, min, max, step = "any", disabled, compact }: {
+  label: string; symbol?: string; unit?: string; value: unknown; onChange: (next: string) => void; hint?: string;
+  min?: number; max?: number; step?: string; disabled?: boolean; compact?: boolean;
 }) {
+  if (!compact) {
+    return (
+      <label className={styles.row}>
+        <span className={styles.rowLabel}>{label}{hint ? <small>{hint}</small> : null}</span>
+        <span className={styles.rowSymbol}>{symbol}</span>
+        <input type="number" inputMode="decimal" step={step} min={min} max={max} value={String(value ?? "")} disabled={disabled}
+          onChange={(event) => onChange(event.target.value)} />
+        <span className={styles.rowUnit}>{unit}</span>
+      </label>
+    );
+  }
   return (
     <label className={styles.field}>
       <span>{label}{unit ? <em>{unit}</em> : null}</span>
@@ -291,15 +306,15 @@ export function ConcreteSectionEditor({ values, onChange, result, resultCurrent,
 
         <div className={styles.sideFields}>
           <fieldset className={styles.group} disabled={disabled}>
-            <legend>Geometry</legend>
-            <div className={styles.grid2}>
-              <NumberField label="Width b" unit="mm" value={section.width_mm} min={0} onChange={(value) => setSection({ width_mm: value })} />
-              <NumberField label="Depth D" unit="mm" value={section.depth_mm} min={0} onChange={(value) => setSection({ depth_mm: value })} />
+            <legend><i>1</i>Geometry</legend>
+            <div className={styles.rows}>
+              <NumberField label="Width" symbol="b" unit="mm" value={section.width_mm} min={0} onChange={(value) => setSection({ width_mm: value })} />
+              <NumberField label="Depth" symbol="D" unit="mm" value={section.depth_mm} min={0} onChange={(value) => setSection({ depth_mm: value })} />
             </div>
           </fieldset>
           <fieldset className={styles.group} disabled={disabled}>
-            <legend>Actions</legend>
-            <NumberField label="Axial force N" unit="kN" value={values.axial_force_kn} onChange={(value) => onChange({ ...values, axial_force_kn: value })} hint="Positive compression; negative tension." />
+            <legend><i>4</i>Actions</legend>
+            <NumberField label="Axial force" symbol="N" unit="kN" value={values.axial_force_kn} onChange={(value) => onChange({ ...values, axial_force_kn: value })} hint="Positive compression; negative tension." />
             <label className={styles.field}>
               <span>Neutral-axis angle<em>deg</em></span>
               <div className={styles.angleRow}>
@@ -317,12 +332,12 @@ export function ConcreteSectionEditor({ values, onChange, result, resultCurrent,
       </div>
 
       <fieldset className={styles.group} disabled={disabled}>
-        <legend>Reinforcement · {bars.length} bars · As = {fmt(steelArea, 0)} mm²{validShape ? ` · ${fmt((100 * steelArea) / (width * depth), 2)}% of gross` : ""}</legend>
+        <legend><i>2</i>Reinforcement · {bars.length} bars · As = {fmt(steelArea, 0)} mm²{validShape ? ` · ${fmt((100 * steelArea) / (width * depth), 2)}% of gross` : ""}</legend>
         {bars.length ? <button type="button" className={styles.textButton} onClick={() => { setBars([]); setSelectedBar(null); }}>Remove all bars</button> : null}
         <div className={styles.layerTools}>
-          <NumberField label="Bars" value={layer.count} step="1" min={1} onChange={(value) => setLayer({ ...layer, count: value })} />
-          <NumberField label="Bar Ø" unit="mm" value={layer.diameter} min={0} onChange={(value) => { setLayer({ ...layer, diameter: value }); setPlaceDiameter(value); }} />
-          <NumberField label="Face to bar centre" unit="mm" value={layer.edge} min={0} onChange={(value) => setLayer({ ...layer, edge: value })} />
+          <NumberField compact label="Bars" value={layer.count} step="1" min={1} onChange={(value) => setLayer({ ...layer, count: value })} />
+          <NumberField compact label="Bar Ø" unit="mm" value={layer.diameter} min={0} onChange={(value) => { setLayer({ ...layer, diameter: value }); setPlaceDiameter(value); }} />
+          <NumberField compact label="Face to bar centre" unit="mm" value={layer.edge} min={0} onChange={(value) => setLayer({ ...layer, edge: value })} />
           <label className={styles.field}><span>Face</span>
             <select value={layer.face} onChange={(event) => setLayer({ ...layer, face: event.target.value as "top" | "bottom" })}><option value="bottom">Bottom</option><option value="top">Top</option></select>
           </label>
@@ -351,24 +366,24 @@ export function ConcreteSectionEditor({ values, onChange, result, resultCurrent,
 
       <div className={styles.grid2}>
         <fieldset className={styles.group} disabled={disabled}>
-          <legend>Concrete model</legend>
-          <div className={styles.grid2}>
-            <NumberField label="f′c" unit="MPa" value={concrete.compressive_strength_mpa} onChange={(value) => setGroup("concrete", "compressive_strength_mpa", value)} />
-            <NumberField label="Ec" unit="MPa" value={concrete.elastic_modulus_mpa} onChange={(value) => setGroup("concrete", "elastic_modulus_mpa", value)} />
-            <NumberField label="Stress block α" value={concrete.stress_block_alpha} onChange={(value) => setGroup("concrete", "stress_block_alpha", value)} />
-            <NumberField label="Stress block γ" value={concrete.stress_block_gamma} onChange={(value) => setGroup("concrete", "stress_block_gamma", value)} />
-            <NumberField label="Ultimate strain εcu" value={concrete.ultimate_compressive_strain} onChange={(value) => setGroup("concrete", "ultimate_compressive_strain", value)} />
-            <NumberField label="Density" unit="kg/m³" value={concrete.density_kg_m3} onChange={(value) => setGroup("concrete", "density_kg_m3", value)} />
+          <legend><i>3</i>Concrete model</legend>
+          <div className={styles.rows}>
+            <NumberField label="Compressive strength" symbol="f′c" unit="MPa" value={concrete.compressive_strength_mpa} onChange={(value) => setGroup("concrete", "compressive_strength_mpa", value)} />
+            <NumberField label="Elastic modulus" symbol="Ec" unit="MPa" value={concrete.elastic_modulus_mpa} onChange={(value) => setGroup("concrete", "elastic_modulus_mpa", value)} />
+            <NumberField label="Stress block intensity" symbol="α" value={concrete.stress_block_alpha} onChange={(value) => setGroup("concrete", "stress_block_alpha", value)} />
+            <NumberField label="Stress block depth" symbol="γ" value={concrete.stress_block_gamma} onChange={(value) => setGroup("concrete", "stress_block_gamma", value)} />
+            <NumberField label="Ultimate compressive strain" symbol="εcu" value={concrete.ultimate_compressive_strain} onChange={(value) => setGroup("concrete", "ultimate_compressive_strain", value)} />
+            <NumberField label="Density" symbol="ρc" unit="kg/m³" value={concrete.density_kg_m3} onChange={(value) => setGroup("concrete", "density_kg_m3", value)} />
           </div>
           <p className={styles.note}>Coefficients are supplied explicitly. No AS 3600 values are derived from f′c.</p>
         </fieldset>
         <fieldset className={styles.group} disabled={disabled}>
-          <legend>Reinforcement steel model</legend>
-          <div className={styles.grid2}>
-            <NumberField label="fsy" unit="MPa" value={steel.yield_strength_mpa} onChange={(value) => setGroup("steel", "yield_strength_mpa", value)} />
-            <NumberField label="Es" unit="MPa" value={steel.elastic_modulus_mpa} onChange={(value) => setGroup("steel", "elastic_modulus_mpa", value)} />
-            <NumberField label="Fracture strain" value={steel.fracture_strain} onChange={(value) => setGroup("steel", "fracture_strain", value)} />
-            <NumberField label="Density" unit="kg/m³" value={steel.density_kg_m3} onChange={(value) => setGroup("steel", "density_kg_m3", value)} />
+          <legend><i>3</i>Reinforcement steel model</legend>
+          <div className={styles.rows}>
+            <NumberField label="Yield strength" symbol="fsy" unit="MPa" value={steel.yield_strength_mpa} onChange={(value) => setGroup("steel", "yield_strength_mpa", value)} />
+            <NumberField label="Elastic modulus" symbol="Es" unit="MPa" value={steel.elastic_modulus_mpa} onChange={(value) => setGroup("steel", "elastic_modulus_mpa", value)} />
+            <NumberField label="Fracture strain" symbol="εsu" value={steel.fracture_strain} onChange={(value) => setGroup("steel", "fracture_strain", value)} />
+            <NumberField label="Density" symbol="ρs" unit="kg/m³" value={steel.density_kg_m3} onChange={(value) => setGroup("steel", "density_kg_m3", value)} />
           </div>
         </fieldset>
       </div>
@@ -484,26 +499,26 @@ export function SteelAxialEditor({ values, onChange, disabled }: { values: Value
         </div>
         <button type="button" className={styles.ghostButton} disabled={disabled} onClick={() => onChange({ ...STEEL_AXIAL_EXAMPLE })}>Load illustrative example</button>
       </div>
-      <div className={styles.grid2}>
+      <div className={styles.sheet}>
         <fieldset className={styles.group} disabled={disabled}>
-          <legend>Section</legend>
-          <NumberField label="Gross area Ag" unit="mm²" value={values.gross_area_mm2} min={0} onChange={set("gross_area_mm2")} />
-          <NumberField label="Net area An" unit="mm²" value={values.net_area_mm2} min={0} onChange={set("net_area_mm2")} hint={ag > 0 && an > 0 ? `An / Ag = ${fmt(an / ag, 3)}` : "Deduct holes and penetrations."} />
+          <legend><i>1</i>Section</legend>
+          <NumberField label="Gross area" symbol="Ag" unit="mm²" value={values.gross_area_mm2} min={0} onChange={set("gross_area_mm2")} />
+          <NumberField label="Net area" symbol="An" unit="mm²" value={values.net_area_mm2} min={0} onChange={set("net_area_mm2")} hint={ag > 0 && an > 0 ? `An / Ag = ${fmt(an / ag, 3)}` : "Deduct holes and penetrations."} />
         </fieldset>
         <fieldset className={styles.group} disabled={disabled}>
-          <legend>Material</legend>
-          <NumberField label="Yield strength fy" unit="MPa" value={values.yield_strength_mpa} min={0} onChange={set("yield_strength_mpa")} />
-          <NumberField label="Tensile strength fu" unit="MPa" value={values.ultimate_strength_mpa} min={0} onChange={set("ultimate_strength_mpa")} hint="Use values for the actual product and thickness; a grade label alone is insufficient." />
+          <legend><i>2</i>Material</legend>
+          <NumberField label="Yield strength" symbol="fy" unit="MPa" value={values.yield_strength_mpa} min={0} onChange={set("yield_strength_mpa")} />
+          <NumberField label="Tensile strength" symbol="fu" unit="MPa" value={values.ultimate_strength_mpa} min={0} onChange={set("ultimate_strength_mpa")} hint="Use values for the actual product and thickness; a grade label alone is insufficient." />
         </fieldset>
         <fieldset className={styles.group} disabled={disabled}>
-          <legend>Assessed factors</legend>
-          <NumberField label="Distribution factor kt" value={values.tension_distribution_factor} min={0} max={1} onChange={set("tension_distribution_factor")} hint="Assessed for the end connection; no default is applied." />
-          <NumberField label="Form factor kf" value={values.compression_form_factor} min={0} max={1} onChange={set("compression_form_factor")} hint="Assessed for local buckling of the section; no default is applied." />
+          <legend><i>3</i>Assessed factors</legend>
+          <NumberField label="Tension distribution factor" symbol="kt" value={values.tension_distribution_factor} min={0} max={1} onChange={set("tension_distribution_factor")} hint="Assessed for the end connection; no default is applied." />
+          <NumberField label="Form factor" symbol="kf" value={values.compression_form_factor} min={0} max={1} onChange={set("compression_form_factor")} hint="Assessed for local buckling of the section; no default is applied." />
         </fieldset>
         <fieldset className={styles.group} disabled={disabled}>
-          <legend>Design actions</legend>
-          <NumberField label="Tension N*t" unit="kN" value={values.tension_action_kn} min={0} onChange={set("tension_action_kn")} />
-          <NumberField label="Compression N*c" unit="kN" value={values.compression_action_kn} min={0} onChange={set("compression_action_kn")} hint="Factored magnitudes, entered as nonnegative values." />
+          <legend><i>4</i>Design actions</legend>
+          <NumberField label="Design tension" symbol="N*t" unit="kN" value={values.tension_action_kn} min={0} onChange={set("tension_action_kn")} />
+          <NumberField label="Design compression" symbol="N*c" unit="kN" value={values.compression_action_kn} min={0} onChange={set("compression_action_kn")} hint="Factored magnitudes, entered as nonnegative values." />
         </fieldset>
       </div>
       {issues.map((issue) => <p className={styles.warning} key={issue}>{issue}</p>)}
@@ -537,14 +552,46 @@ function UtilisationCard({ title, check, extra }: { title: string; check: AxialC
   );
 }
 
+function CheckSummary({ checks }: { checks: Array<{ name: string; reference: string; check: AxialCheck }> }) {
+  const failing = checks.filter((item) => !item.check.section_capacity_satisfied);
+  return (
+    <div className={styles.summaryTable} role="table" aria-label="Check summary">
+      <div className={`${styles.summaryBanner} ${failing.length ? styles.summaryFail : styles.summaryPass}`} role="row">
+        <i className={styles.summaryDot} aria-hidden="true" />
+        {failing.length ? `${failing.length} of ${checks.length} checks exceeded` : `All ${checks.length} section checks satisfied`}
+      </div>
+      {checks.map(({ name, reference, check }) => {
+        const pass = check.section_capacity_satisfied;
+        return (
+          <div className={styles.summaryRow} role="row" key={name}>
+            <span>{name}<small>{reference} · {check.governing_mode}</small></span>
+            <div className={`${styles.utilTrack} ${pass ? "" : styles.checkFail}`} aria-hidden="true">
+              <div className={styles.utilFill} style={{ width: `${Math.min(Math.max(check.utilisation, 0), 1) * 100}%` }} />
+            </div>
+            <span className={styles.summaryPct}>{fmt(check.utilisation * 100, 0)}%</span>
+            <span className={pass ? styles.passPill : styles.failPill}>{pass ? "OK" : "Exceeded"}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SteelAxialResults({ result }: { result: SteelAxialResult }) {
   return (
     <div className={styles.results}>
+      <CheckSummary checks={[
+        { name: "Tension · section", reference: "Cl. 7.2", check: result.tension },
+        { name: "Compression · section", reference: "Cl. 6.2.1", check: result.compression },
+      ]} />
       <p className={styles.note}>{result.standard} · {result.scope} · φ = {fmt(result.capacity_factor, 2)}</p>
-      <UtilisationCard title="Tension" check={result.tension} extra={
-        <p className={styles.note}>Gross yielding {fmt(result.tension_nominal_modes_kn.gross_yielding)} kN · net fracture {fmt(result.tension_nominal_modes_kn.net_fracture)} kN</p>
-      } />
-      <UtilisationCard title="Compression · section" check={result.compression} />
+      <details className={styles.checkDetails}>
+        <summary>Check details · capacities and governing modes</summary>
+        <UtilisationCard title="Tension" check={result.tension} extra={
+          <p className={styles.note}>Gross yielding {fmt(result.tension_nominal_modes_kn.gross_yielding)} kN · net fracture {fmt(result.tension_nominal_modes_kn.net_fracture)} kN</p>
+        } />
+        <UtilisationCard title="Compression · section" check={result.compression} />
+      </details>
       {result.warnings.length ? (
         <details className={styles.limits}>
           <summary>Scope and limitations · {result.warnings.length}</summary>

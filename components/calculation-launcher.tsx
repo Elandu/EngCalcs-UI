@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useId, useMemo, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AS3600_SECTION_ID, AS4100_SECTION_ID, calculationDisplayName, calculationGuide, calculationWorkspaceHref, FRAME_ANALYSIS_ID, WIND_ASSESSMENT_ID } from "@/lib/calculation-catalogue";
@@ -643,12 +643,15 @@ export function CalculationLauncher({
   initialCalculationId,
   sourceRuns,
   focusedCalculationId,
+  initialRevisionCalculationId,
   heading,
 }: {
   projectId: string;
   initialCalculationId?: string;
   sourceRuns: LinkSourceRun[];
   focusedCalculationId?: string;
+  /** Saved calculation to open for revision once definitions load (from the project tree). */
+  initialRevisionCalculationId?: string;
   heading?: string;
 }) {
   const router = useRouter();
@@ -668,6 +671,7 @@ export function CalculationLauncher({
   const [submittedRun, setSubmittedRun] = useState<SavedRunSummary | null>(null);
   const [revisionTarget, setRevisionTarget] = useState<{ calculationId: string; expectedRunId: string } | null>(null);
   const [livePreviewEnabled, setLivePreviewEnabled] = useState(true);
+  const openedRevision = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -803,6 +807,31 @@ export function CalculationLauncher({
     setMessage("");
     setRevisionTarget(null);
     setSubmittedRun(null);
+  }
+
+  useEffect(() => {
+    if (openedRevision.current || !initialRevisionCalculationId || !definitions.length) return;
+    const latest = sourceRuns.filter((run) => run.calculationId === initialRevisionCalculationId && run.revisable)
+      .sort((a, b) => b.runSequence - a.runSequence)[0];
+    if (!latest) {
+      openedRevision.current = true;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      openedRevision.current = true;
+      reviseRun(latest.runId);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  });
+
+  function printReport() {
+    document.body.dataset.print = "calculation";
+    const reset = () => {
+      delete document.body.dataset.print;
+      window.removeEventListener("afterprint", reset);
+    };
+    window.addEventListener("afterprint", reset);
+    window.print();
   }
 
   function clearInputs() {
@@ -978,9 +1007,21 @@ export function CalculationLauncher({
   return (
     <section className="calculator-launcher" aria-labelledby={headingId}>
       <div className="launcher-heading">
+        {guide ? (
+          <div className="print-only calc-report-header">
+            <strong>{title || guide.title}</strong>
+            <span>{guide.title} · {guide.scope}</span>
+            <span>Printed {new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}{savedRun?.runSequence ? ` · saved run ${savedRun.runSequence}` : " · unsaved preview"}</span>
+          </div>
+        ) : null}
         <div>
           <p className="eyebrow">{guide ? guide.scope : focusedCalculationId ? "Wind calculation" : "Advanced calculations"}</p>
           <h2 id={headingId}>{heading ?? "Calculation components & links"}</h2>
+          {guide && selected ? (
+            <div className="launcher-actions no-print">
+              <button type="button" className="button button-secondary button-small" onClick={printReport}>Print / save PDF</button>
+            </div>
+          ) : null}
           {focusedCalculationId ? <p>{guide?.summary ?? selected?.description ?? "This calculation requires the corresponding backend release before it can run."}</p> :
             <p>Run an individual component or link saved outputs into its inputs. For a complete wind assessment, <Link href={calculationWorkspaceHref(WIND_ASSESSMENT_ID, projectId)}>open Wind calculation</Link>.</p>}
         </div>

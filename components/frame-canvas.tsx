@@ -60,6 +60,16 @@ function fmt(value: number, digits = 2) {
   return Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : "—";
 }
 
+/** Green → amber → red ramp for member force magnitude relative to the largest in the model. */
+function heatColor(ratio: number) {
+  const stops = [[111, 191, 90], [243, 193, 75], [232, 102, 74]];
+  const t = Math.min(Math.max(ratio, 0), 1) * (stops.length - 1);
+  const index = Math.min(Math.floor(t), stops.length - 2);
+  const local = t - index;
+  const [r, g, b] = stops[index].map((value, channel) => Math.round(value + (stops[index + 1][channel] - value) * local));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 function screenDirection(from: { x: number; y: number }, to: { x: number; y: number }) {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -281,6 +291,15 @@ export function FrameCanvas({
     return maxAbs > 1e-12 ? (extent * 0.14 * magnifier) / maxAbs : 0;
   }, [comboMembers, extent, magnifier, overlay]);
 
+  const memberHeat = useMemo(() => {
+    if (overlay === "none" || overlay === "deformed") return null;
+    const peaks = new Map(comboMembers.map((member) => [member.member_id, member.stations.reduce(
+      (peak, station) => Number.isFinite(station[overlay]) ? Math.max(peak, Math.abs(station[overlay])) : peak, 0,
+    )]));
+    const largest = Math.max(0, ...peaks.values());
+    return largest > 1e-12 ? new Map([...peaks].map(([id, peak]) => [id, peak / largest])) : null;
+  }, [comboMembers, overlay]);
+
   const maxLineLoad = Math.max(1e-9, ...model.member_distributed_loads.map((load) => Math.max(Math.abs(load.start_kn_m), Math.abs(load.end_kn_m))));
   const reactionsShown = result && comboNodes.length && overlay !== "none";
   const maxReaction = Math.max(1e-9, ...comboNodes.map((node) => Math.max(Math.abs(node.reaction_fx_kn), Math.abs(node.reaction_fy_kn), Math.abs(node.reaction_fz_kn))));
@@ -378,7 +397,8 @@ export function FrameCanvas({
           return (
             <g key={member.id} data-member={member.id}>
               <line x1={start.x} y1={start.y} x2={end.x} y2={end.y}
-                className={`${selected ? styles.memberSelected : styles.member} ${overlay !== "none" && result ? styles.memberUnderlay : ""}`} />
+                className={`${selected ? styles.memberSelected : styles.member} ${overlay !== "none" && result && !memberHeat ? styles.memberUnderlay : ""}`}
+                style={memberHeat && !selected && memberHeat.has(member.id) ? { stroke: heatColor(memberHeat.get(member.id) ?? 0), strokeWidth: 5 } : undefined} />
               <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} className={styles.memberHitArea} />
               <text x={(start.x + end.x) / 2 + 8} y={(start.y + end.y) / 2 - 9} className={styles.memberLabel}>{member.id}</text>
             </g>
@@ -525,6 +545,7 @@ export function FrameCanvas({
         <span>{model.nodes.length} nodes</span>
         <span>{model.members.length} members</span>
         <span>{model.supports.length} supports</span>
+        {memberHeat ? <span className={styles.heatLegend}>low <i aria-hidden="true" /> high |{OVERLAY_CHOICES.find((choice) => choice.value === overlay)?.label}|</span> : null}
         <span>{activeTool === "node" ? "Click to place a node on the working plane" : activeTool === "member" ? (pendingStart ? `From ${pendingStart}: click the end node · Esc to stop` : "Click a start node") : isEditableView ? "Drag nodes to move · drag background to pan · scroll to zoom" : "Drag to orbit · Shift-drag to pan · scroll to zoom"}</span>
       </div>
     </div>
