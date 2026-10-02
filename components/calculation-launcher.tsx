@@ -6,6 +6,9 @@ import Link from "next/link";
 import { AS3600_SECTION_ID, AS4100_SECTION_ID, calculationDisplayName, calculationGuide, calculationWorkspaceHref, FRAME_ANALYSIS_ID, WIND_ASSESSMENT_ID } from "@/lib/calculation-catalogue";
 import { useLivePreview } from "@/lib/use-live-preview";
 import {
+  CheckChips,
+  concreteChips,
+  steelChips,
   ConcreteSectionEditor,
   ConcreteSectionResults,
   parseConcreteSectionResult,
@@ -1003,10 +1006,129 @@ export function CalculationLauncher({
 
   if (loading) return <div className="calculator-launcher">Loading calculation library…</div>;
   const headingId = `calculation-title-${focusedCalculationId ?? "advanced"}`;
+  const outputPaneContent = (
+    <>
+              {isSectionCalculation(selected?.id) ? (
+                <div className="live-preview-panel">
+                  <div className="calculation-output-heading">
+                    <div>
+                      <p className="eyebrow">Engine result</p>
+                      <h3>Live preview</h3>
+                    </div>
+                    <label className="live-preview-toggle">
+                      <input type="checkbox" checked={livePreviewEnabled} onChange={(event) => setLivePreviewEnabled(event.target.checked)} />
+                      <span>Auto-update</span>
+                    </label>
+                  </div>
+                  <p className={`live-preview-status is-${!livePreviewEnabled ? "off" : sectionInputs.error ? "invalid" : preview.status === "error" ? "error" : preview.current ? "current" : "pending"}`} role="status">
+                    {!livePreviewEnabled ? "Auto-update is off. Run & save to calculate."
+                      : sectionInputs.error ? `Waiting for valid inputs · ${sectionInputs.error}`
+                      : preview.status === "error" ? preview.error
+                      : preview.current ? "Current inputs · not saved"
+                      : "Updating…"}
+                  </p>
+                  {preview.result ? (
+                    <div className={preview.current ? undefined : "live-preview-stale"}>
+                      {preview.result.kind === "concrete" ? <ConcreteSectionResults result={preview.result.value} /> : <SteelAxialResults result={preview.result.value} />}
+                    </div>
+                  ) : null}
+                  {preview.current ? (
+                    <button type="submit" form={formId} className="button button-primary live-preview-save" disabled={busy}>
+                      {busy ? "Saving…" : revisionTarget ? "Save as new revision" : "Save this result to the project"}
+                    </button>
+                  ) : null}
+                  <p className="calculation-output-note">Previews run the same engine without saving. Saving records the inputs, result and engine version in the project history.</p>
+                </div>
+              ) : null}
+              <div className="calculation-output-heading">
+                <div>
+                  <p className="eyebrow">Saved output</p>
+                  <h3 id={outputHeadingId}>Latest run</h3>
+                </div>
+                <span className={savedRun ? "calculation-output-status is-saved" : "calculation-output-status"}>
+                  {savedRun ? "Saved" : "Waiting"}
+                </span>
+              </div>
+              {savedRun ? (
+                <>
+                  <p className="calculation-output-run-title">{savedRun.title}</p>
+                  <div className="calculation-output-run-meta">
+                    <span>{savedRun.runSequence ? `Run ${savedRun.runSequence}` : "Latest saved run"}</span>
+                    <time dateTime={savedRun.createdAt}>
+                      {displayRunTimestamp(savedRun.createdAt)}
+                    </time>
+                  </div>
+                  <code className="calculation-output-run-id" title={savedRun.runId}>Run ID · {savedRun.runId || "Available in run history"}</code>
+                  {savedStructuralResult && !preview.result ? (
+                    savedStructuralResult.kind === "concrete" ? <ConcreteSectionResults result={savedStructuralResult.value} /> : <SteelAxialResults result={savedStructuralResult.value} />
+                  ) : savedOutputs.length ? (
+                    <dl className="calculation-output-values">
+                      {savedOutputs.slice(0, 8).map((output) => (
+                        <div key={output.path}>
+                          <dt>{output.label}</dt>
+                          <dd>{displayLinkedValue(output.value)}{output.unit ? ` ${output.unit}` : ""}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="calculation-output-empty">This run has no schema-matched outputs to summarize. Open its full run record below for the complete response.</p>
+                  )}
+                  {savedOutputs.length > 8 ? <p className="calculation-output-note">Showing 8 of {savedOutputs.length} outputs. The full result is in the run record below.</p> : null}
+                  {savedRun.linkedInputs?.length ? (
+                    <div className="calculation-output-links">
+                      <strong>Inputs linked in this run</strong>
+                      <ul>
+                        {savedRun.linkedInputs.map((link) => (
+                          <li key={`${link.sourceRunId}:${link.targetInputPath}`}>
+                            <span>{link.sourceOutputLabel}</span>
+                            <span aria-hidden="true">→</span>
+                            <span>{link.targetInputLabel}</span>
+                            <small>{link.sourceTitle} · {link.sourceRunSequence ? `Run ${link.sourceRunSequence}` : "Saved run"} · {link.sourceOutputPath} → {link.targetInputPath}<br />Source run · {link.sourceRunId}</small>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="calculation-output-empty-state">
+                  <span aria-hidden="true">↗</span>
+                  <p>Run this calculation to review its saved outputs beside the inputs.</p>
+                  <small>Saved results remain available in the project run history.</small>
+                </div>
+              )}
+    </>
+  );
+  const sectionAside = (
+    <aside className="calculation-output-pane is-embedded" aria-labelledby={outputHeadingId} aria-live="polite">
+      {outputPaneContent}
+    </aside>
+  );
 
   return (
-    <section className="calculator-launcher" aria-labelledby={headingId}>
-      <div className="launcher-heading">
+    <section className={guide ? "calculator-launcher is-sheet" : "calculator-launcher"} aria-labelledby={headingId}>
+      {guide && selected ? (
+        <div className="sheet-bar">
+          <div className="sheet-bar-title">
+            <small>{guide.title} · {guide.scope}</small>
+            <strong>{title || guide.title}</strong>
+            <span className={`sheet-bar-status is-${busy ? "busy" : preview.current ? "live" : savedRun ? "saved" : "draft"}`}>
+              {busy ? "Saving…" : preview.current ? (revisionTarget ? "Live · unsaved changes" : "Live · not saved") : savedRun ? `Saved${savedRun.runSequence ? ` · run ${savedRun.runSequence}` : ""}` : "Draft"}
+            </span>
+          </div>
+          {shownStructuralResult ? (
+            <CheckChips
+              chips={shownStructuralResult.kind === "steel" ? steelChips(shownStructuralResult.value) : concreteChips(shownStructuralResult.value)}
+              stale={Boolean(preview.result) && !preview.current}
+            />
+          ) : <span className="sheet-bar-empty">{sectionInputs.error ? `Waiting for inputs · ${sectionInputs.error}` : "Checks appear as soon as the inputs are complete"}</span>}
+          <div className="sheet-bar-actions no-print">
+            <button type="button" className="button button-secondary button-small" onClick={printReport} title="Print or save as PDF">Print</button>
+            <button type="submit" form={formId} className="button button-primary button-small" disabled={busy}>{revisionTarget ? "Save revision" : "Save"}</button>
+          </div>
+        </div>
+      ) : null}
+      <div className={guide ? "launcher-heading is-compact" : "launcher-heading"}>
         {guide ? (
           <div className="print-only calc-report-header">
             <strong>{title || guide.title}</strong>
@@ -1017,11 +1139,6 @@ export function CalculationLauncher({
         <div>
           <p className="eyebrow">{guide ? guide.scope : focusedCalculationId ? "Wind calculation" : "Advanced calculations"}</p>
           <h2 id={headingId}>{heading ?? "Calculation components & links"}</h2>
-          {guide && selected ? (
-            <div className="launcher-actions no-print">
-              <button type="button" className="button button-secondary button-small" onClick={printReport}>Print / save PDF</button>
-            </div>
-          ) : null}
           {focusedCalculationId ? <p>{guide?.summary ?? selected?.description ?? "This calculation requires the corresponding backend release before it can run."}</p> :
             <p>Run an individual component or link saved outputs into its inputs. For a complete wind assessment, <Link href={calculationWorkspaceHref(WIND_ASSESSMENT_ID, projectId)}>open Wind calculation</Link>.</p>}
         </div>
@@ -1032,7 +1149,7 @@ export function CalculationLauncher({
       ) : (
         <form className="calculator-form" id={formId} onSubmit={run}>
           <fieldset className="calculation-form-fields" disabled={busy}>
-          <div className="calculation-workbench">
+          <div className={isSectionCalculation(selected?.id) ? "calculation-workbench is-sheet" : "calculation-workbench"}>
             <div className="calculation-input-pane">
               {revisableRuns.length ? <label>{guide ? "Open a saved version" : "Revise a saved calculation"}
                 <select value={revisionTarget?.calculationId ?? ""} disabled={busy} onChange={(event) => {
@@ -1080,9 +1197,10 @@ export function CalculationLauncher({
                   result={shownStructuralResult?.kind === "concrete" ? shownStructuralResult.value : null}
                   resultCurrent={preview.current}
                   disabled={busy || linkedInputs.length > 0}
+                  aside={sectionAside}
                 />
               ) : selected?.id === AS4100_SECTION_ID ? (
-                <SteelAxialEditor values={values} onChange={setValues} disabled={busy || linkedInputs.length > 0} />
+                <SteelAxialEditor values={values} onChange={setValues} disabled={busy || linkedInputs.length > 0} aside={sectionAside} />
               ) : <div className="schema-input-grid">
                 {Object.entries(selected?.input_schema?.properties ?? {}).map(([key, schema]) => (
                   <SchemaField
@@ -1185,97 +1303,11 @@ export function CalculationLauncher({
               {message ? <p className="form-message" role="status" aria-live="polite">{message}</p> : null}
             </div>
 
-            <aside className="calculation-output-pane" aria-labelledby={outputHeadingId} aria-live="polite">
-              {isSectionCalculation(selected?.id) ? (
-                <div className="live-preview-panel">
-                  <div className="calculation-output-heading">
-                    <div>
-                      <p className="eyebrow">Engine result</p>
-                      <h3>Live preview</h3>
-                    </div>
-                    <label className="live-preview-toggle">
-                      <input type="checkbox" checked={livePreviewEnabled} onChange={(event) => setLivePreviewEnabled(event.target.checked)} />
-                      <span>Auto-update</span>
-                    </label>
-                  </div>
-                  <p className={`live-preview-status is-${!livePreviewEnabled ? "off" : sectionInputs.error ? "invalid" : preview.status === "error" ? "error" : preview.current ? "current" : "pending"}`} role="status">
-                    {!livePreviewEnabled ? "Auto-update is off. Run & save to calculate."
-                      : sectionInputs.error ? `Waiting for valid inputs · ${sectionInputs.error}`
-                      : preview.status === "error" ? preview.error
-                      : preview.current ? "Current inputs · not saved"
-                      : "Updating…"}
-                  </p>
-                  {preview.result ? (
-                    <div className={preview.current ? undefined : "live-preview-stale"}>
-                      {preview.result.kind === "concrete" ? <ConcreteSectionResults result={preview.result.value} /> : <SteelAxialResults result={preview.result.value} />}
-                    </div>
-                  ) : null}
-                  {preview.current ? (
-                    <button type="submit" form={formId} className="button button-primary live-preview-save" disabled={busy}>
-                      {busy ? "Saving…" : revisionTarget ? "Save as new revision" : "Save this result to the project"}
-                    </button>
-                  ) : null}
-                  <p className="calculation-output-note">Previews run the same engine without saving. Saving records the inputs, result and engine version in the project history.</p>
-                </div>
-              ) : null}
-              <div className="calculation-output-heading">
-                <div>
-                  <p className="eyebrow">Saved output</p>
-                  <h3 id={outputHeadingId}>Latest run</h3>
-                </div>
-                <span className={savedRun ? "calculation-output-status is-saved" : "calculation-output-status"}>
-                  {savedRun ? "Saved" : "Waiting"}
-                </span>
-              </div>
-              {savedRun ? (
-                <>
-                  <p className="calculation-output-run-title">{savedRun.title}</p>
-                  <div className="calculation-output-run-meta">
-                    <span>{savedRun.runSequence ? `Run ${savedRun.runSequence}` : "Latest saved run"}</span>
-                    <time dateTime={savedRun.createdAt}>
-                      {displayRunTimestamp(savedRun.createdAt)}
-                    </time>
-                  </div>
-                  <code className="calculation-output-run-id" title={savedRun.runId}>Run ID · {savedRun.runId || "Available in run history"}</code>
-                  {savedStructuralResult && !preview.result ? (
-                    savedStructuralResult.kind === "concrete" ? <ConcreteSectionResults result={savedStructuralResult.value} /> : <SteelAxialResults result={savedStructuralResult.value} />
-                  ) : savedOutputs.length ? (
-                    <dl className="calculation-output-values">
-                      {savedOutputs.slice(0, 8).map((output) => (
-                        <div key={output.path}>
-                          <dt>{output.label}</dt>
-                          <dd>{displayLinkedValue(output.value)}{output.unit ? ` ${output.unit}` : ""}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  ) : (
-                    <p className="calculation-output-empty">This run has no schema-matched outputs to summarize. Open its full run record below for the complete response.</p>
-                  )}
-                  {savedOutputs.length > 8 ? <p className="calculation-output-note">Showing 8 of {savedOutputs.length} outputs. The full result is in the run record below.</p> : null}
-                  {savedRun.linkedInputs?.length ? (
-                    <div className="calculation-output-links">
-                      <strong>Inputs linked in this run</strong>
-                      <ul>
-                        {savedRun.linkedInputs.map((link) => (
-                          <li key={`${link.sourceRunId}:${link.targetInputPath}`}>
-                            <span>{link.sourceOutputLabel}</span>
-                            <span aria-hidden="true">→</span>
-                            <span>{link.targetInputLabel}</span>
-                            <small>{link.sourceTitle} · {link.sourceRunSequence ? `Run ${link.sourceRunSequence}` : "Saved run"} · {link.sourceOutputPath} → {link.targetInputPath}<br />Source run · {link.sourceRunId}</small>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <div className="calculation-output-empty-state">
-                  <span aria-hidden="true">↗</span>
-                  <p>Run this calculation to review its saved outputs beside the inputs.</p>
-                  <small>Saved results remain available in the project run history.</small>
-                </div>
-              )}
-            </aside>
+            {isSectionCalculation(selected?.id) ? null : (
+              <aside className="calculation-output-pane" aria-labelledby={outputHeadingId} aria-live="polite">
+                {outputPaneContent}
+              </aside>
+            )}
           </div>
           </fieldset>
         </form>

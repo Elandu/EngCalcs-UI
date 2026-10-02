@@ -19,6 +19,7 @@ import {
   WIND_ASSESSMENT_ID,
 } from "@/lib/calculation-catalogue";
 import { revisionStatuses, type RevisionRun } from "@/lib/calculation-revisions";
+import { calculationStatus } from "@/lib/calculation-status";
 
 export const dynamic = "force-dynamic";
 
@@ -518,9 +519,13 @@ export default async function ProjectPage({
                 : guide
                   ? `/dashboard/projects/${encodeURIComponent(project.id)}?calculation=${encodeURIComponent(calculation.calculation_definition_id)}&revise=${encodeURIComponent(calculation.id)}#workspace`
                   : `#calc-${calculation.id}`;
+              const status = calculationStatus(calculation.calculation_definition_id, run?.result_json, Boolean(stale));
               return (
                 <Link key={calculation.id} href={href}
                   className={reviseCalculationId === calculation.id ? "project-sidebar-item is-active" : "project-sidebar-item"}>
+                  <i className={`status-icon is-${status}`} aria-label={{ pass: "Checks satisfied", fail: "Check exceeded", stale: "Needs update", info: "No code check", none: "Not run" }[status]}>
+                    {{ pass: "✓", fail: "✗", stale: "!", info: "•", none: "○" }[status]}
+                  </i>
                   <span>{calculation.title}</span>
                   <small>{guide?.title ?? calculation.calculation_definition_id.split(".").slice(-1)[0].replaceAll("_", " ")}{run ? ` · run ${run.run_sequence}` : ""}{stale ? " · needs update" : ""}</small>
                 </Link>

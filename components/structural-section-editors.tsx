@@ -6,7 +6,7 @@ import styles from "./structural-section-editors.module.css";
 import {
   barAreaFromDiameter,
   barDiameterFromArea,
-  layerBars,
+  cageBars,
   neutralAxisGeometry,
   nextBarId,
 } from "@/lib/concrete-section";
@@ -29,17 +29,17 @@ function fmt(value: number, digits = 1) {
  * Calculation-sheet row: name, symbol, value and unit on one line, so inputs read like a
  * hand calculation. `compact` keeps the stacked style for inline toolbars.
  */
-function NumberField({ label, symbol, unit, value, onChange, hint, min, max, step = "any", disabled, compact }: {
+function NumberField({ label, symbol, unit, value, onChange, hint, min, max, step = "any", disabled, compact, invalid }: {
   label: string; symbol?: string; unit?: string; value: unknown; onChange: (next: string) => void; hint?: string;
-  min?: number; max?: number; step?: string; disabled?: boolean; compact?: boolean;
+  min?: number; max?: number; step?: string; disabled?: boolean; compact?: boolean; invalid?: boolean;
 }) {
   if (!compact) {
     return (
-      <label className={styles.row}>
+      <label className={invalid ? `${styles.row} ${styles.rowInvalid}` : styles.row}>
         <span className={styles.rowLabel}>{label}{hint ? <small>{hint}</small> : null}</span>
         <span className={styles.rowSymbol}>{symbol}</span>
         <input type="number" inputMode="decimal" step={step} min={min} max={max} value={String(value ?? "")} disabled={disabled}
-          onChange={(event) => onChange(event.target.value)} />
+          aria-invalid={invalid || undefined} onChange={(event) => onChange(event.target.value)} />
         <span className={styles.rowUnit}>{unit}</span>
       </label>
     );
@@ -51,6 +51,53 @@ function NumberField({ label, symbol, unit, value, onChange, hint, min, max, ste
         onChange={(event) => onChange(event.target.value)} />
       {hint ? <small>{hint}</small> : null}
     </label>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Calculation-sheet summary primitives (shared by both section sheets) */
+/* ------------------------------------------------------------------ */
+
+export type SheetChip = { label: string; value: string; tone: "pass" | "fail" | "info" };
+
+/** Header strip of check chips, read at a glance like a calculation sheet's status bar. */
+export function CheckChips({ chips, stale }: { chips: SheetChip[]; stale?: boolean }) {
+  return (
+    <div className={`${styles.chipStrip} ${stale ? styles.staleOverlay : ""}`} role="list" aria-label="Check status">
+      {chips.map((chip) => (
+        <div className={styles.chipBox} role="listitem" key={chip.label}>
+          <span>{chip.label}</span>
+          <b className={chip.tone === "pass" ? styles.chipPass : chip.tone === "fail" ? styles.chipFail : styles.chipInfo}>{chip.value}</b>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function UtilChip({ utilisation }: { utilisation: number }) {
+  const pass = utilisation <= 1;
+  return <span className={pass ? styles.utilChipPass : styles.utilChipFail}>{fmt(utilisation * 100, 0)}%</span>;
+}
+
+function SummaryRow({ label, symbol, value, unit, utilisation }: {
+  label: string; symbol: ReactNode; value: string; unit?: string; utilisation?: number;
+}) {
+  return (
+    <div className={styles.summaryLine}>
+      <span>{label}</span>
+      <i>{symbol} =</i>
+      <b>{value}{unit ? <small> {unit}</small> : null}</b>
+      <span>{utilisation !== undefined && Number.isFinite(utilisation) ? <UtilChip utilisation={utilisation} /> : null}</span>
+    </div>
+  );
+}
+
+function SummaryCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className={styles.summaryCard}>
+      <h4>{title}</h4>
+      {children}
+    </section>
   );
 }
 
@@ -108,22 +155,47 @@ const SNAP_MM = 5;
 /** Common reinforcing bar diameters, offered as shortcuts; any diameter can still be typed. */
 const BAR_SIZES = [10, 12, 16, 20, 24, 28, 32, 36];
 
-function BarSizeChips({ value, onPick, disabled }: { value: string; onPick: (size: string) => void; disabled?: boolean }) {
+type CageState = { cover: string; tie: string; bottomCount: string; bottomDia: string; topCount: string; topDia: string; sideCount: string; sideDia: string };
+
+const DEFAULT_CAGE: CageState = { cover: "40", tie: "10", bottomCount: "3", bottomDia: "20", topCount: "2", topDia: "16", sideCount: "0", sideDia: "12" };
+
+function cageFrom(cage: CageState, width: number, depth: number) {
+  return cageBars({
+    width, depth, coverMm: num(cage.cover), tieMm: num(cage.tie),
+    bottom: { count: Number(cage.bottomCount || 0), diameterMm: num(cage.bottomDia) },
+    top: { count: Number(cage.topCount || 0), diameterMm: num(cage.topDia) },
+    sidePerFace: Number(cage.sideCount || 0), sideDiameterMm: num(cage.sideDia),
+  });
+}
+
+/** Row with a bar count and a bar size, e.g. "Bottom bars  n = [3] × Ø[20] mm". */
+function BarsRow({ label, count, diameter, onCount, onDiameter, disabled, sizes = BAR_SIZES }: {
+  label: string; count: string; diameter: string; onCount: (value: string) => void; onDiameter: (value: string) => void; disabled?: boolean; sizes?: number[];
+}) {
   return (
-    <div className={styles.chips} role="group" aria-label="Common bar diameters">
-      {BAR_SIZES.map((size) => (
-        <button type="button" key={size} disabled={disabled} className={Number(value) === size ? styles.chipActive : styles.chip} onClick={() => onPick(String(size))}>Ø{size}</button>
-      ))}
+    <div className={styles.row}>
+      <span className={styles.rowLabel}>{label}</span>
+      <span className={styles.rowSymbol}>n</span>
+      <span className={styles.barsPair}>
+        <input type="number" min={0} step={1} value={count} disabled={disabled} aria-label={`${label} count`} onChange={(event) => onCount(event.target.value)} />
+        <span aria-hidden="true">× Ø</span>
+        <select value={diameter} disabled={disabled} aria-label={`${label} diameter`} onChange={(event) => onDiameter(event.target.value)}>
+          {sizes.map((size) => <option key={size} value={size}>{size}</option>)}
+        </select>
+      </span>
+      <span className={styles.rowUnit}>mm</span>
     </div>
   );
 }
 
-export function ConcreteSectionEditor({ values, onChange, result, resultCurrent, disabled }: {
+export function ConcreteSectionEditor({ values, onChange, result, resultCurrent, disabled, aside }: {
   values: Values;
   onChange: (next: Values) => void;
   result: ConcreteSectionResult | null;
   resultCurrent: boolean;
   disabled?: boolean;
+  /** Results panel shown under the section preview, as in a calculation sheet's output column. */
+  aside?: ReactNode;
 }) {
   const section = record(values.section);
   const concrete = record(values.concrete);
@@ -136,12 +208,33 @@ export function ConcreteSectionEditor({ values, onChange, result, resultCurrent,
 
   const [selectedBar, setSelectedBar] = useState<number | null>(null);
   const [placeDiameter, setPlaceDiameter] = useState("20");
-  const [layer, setLayer] = useState({ count: "3", diameter: "20", edge: "50", face: "bottom" as "top" | "bottom" });
+  const [mode, setMode] = useState<"cage" | "custom">(() => bars.length ? "custom" : "cage");
+  const [cage, setCage] = useState<CageState>(DEFAULT_CAGE);
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<{ index: number; moved: boolean } | null>(null);
 
   const setSection = (patch: Values) => onChange({ ...values, section: { ...section, ...patch } });
-  const setBars = (next: Values[]) => setSection({ bars: next });
+  // Any direct bar edit leaves the parametric cage so it never overwrites manual changes.
+  const setBars = (next: Values[]) => { setMode("custom"); setSection({ bars: next }); };
+
+  function setGeometry(field: "width_mm" | "depth_mm", value: string) {
+    if (mode !== "cage") return setSection({ [field]: value });
+    const next = cageFrom(cage, field === "width_mm" ? num(value) : width, field === "depth_mm" ? num(value) : depth);
+    setSection({ [field]: value, ...(next.error ? {} : { bars: next.bars }) });
+  }
+
+  function updateCage(patch: Partial<CageState>) {
+    const nextCage = { ...cage, ...patch };
+    setCage(nextCage);
+    const next = cageFrom(nextCage, width, depth);
+    if (!next.error) setSection({ bars: next.bars });
+  }
+
+  function switchToCage() {
+    setMode("cage");
+    const next = cageFrom(cage, width, depth);
+    if (!next.error) setSection({ bars: next.bars });
+  }
   const setGroup = (key: "concrete" | "steel", field: string, value: string) =>
     onChange({ ...values, [key]: { ...record(values[key]), [field]: value } });
 
@@ -187,13 +280,6 @@ export function ConcreteSectionEditor({ values, onChange, result, resultCurrent,
     setBars(bars.map((bar, row) => row === index ? { ...bar, x_mm: point.x, y_mm: point.y } : bar));
   }
 
-  function addLayer() {
-    const next = layerBars({
-      width, depth, count: Number(layer.count), diameterMm: num(layer.diameter), edgeMm: num(layer.edge), face: layer.face,
-      existingIds: bars.map((bar) => String(bar.id ?? "")),
-    });
-    if (next.length) setBars([...bars, ...next]);
-  }
 
   const pad = validShape ? Math.max(width, depth) * 0.14 : 50;
   const viewBox = validShape ? `${-pad} ${-pad} ${width + 2 * pad} ${depth + 2 * pad}` : "0 0 400 300";
@@ -207,27 +293,121 @@ export function ConcreteSectionEditor({ values, onChange, result, resultCurrent,
   });
   const duplicateIds = bars.map((bar) => String(bar.id ?? "")).filter((id, index, all) => all.indexOf(id) !== index);
   const selected = selectedBar !== null ? bars[selectedBar] : undefined;
+  const cageResult = mode === "cage" ? cageFrom(cage, width, depth) : null;
 
   return (
     <div className={styles.editor}>
-      <div className={styles.editorHeading}>
-        <div>
-          <p className={styles.kicker}>Section model</p>
-          <h3>Rectangular reinforced concrete section</h3>
-          <ol className={styles.steps}>
-            <li>Set width and depth</li>
-            <li>Add bar layers or click to place bars</li>
-            <li>Enter material coefficients</li>
-            <li>Read the result on the right, then save</li>
-          </ol>
-        </div>
-        <button type="button" className={styles.ghostButton} disabled={disabled} onClick={() => { onChange(structuredClone(CONCRETE_SECTION_EXAMPLE)); setSelectedBar(null); }}>
-          Load illustrative example
-        </button>
-      </div>
+      <div className={styles.appLayout}>
+        <div className={styles.inputColumn}>
+          <div className={styles.columnHead}>
+            <span>Inputs</span>
+            <button type="button" className={styles.ghostButton} disabled={disabled} onClick={() => { onChange(structuredClone(CONCRETE_SECTION_EXAMPLE)); setMode("custom"); setSelectedBar(null); }}>
+              Load example
+            </button>
+          </div>
 
-      <div className={styles.sectionLayout}>
-        <figure className={styles.canvasCard}>
+          <fieldset className={styles.group} disabled={disabled}>
+            <legend><i>01</i>Section definition</legend>
+            <div className={styles.shapeCards} role="radiogroup" aria-label="Section shape">
+              <button type="button" role="radio" aria-checked="true" className={styles.shapeCardActive}><strong>Rectangle</strong><small>b × D</small></button>
+              <button type="button" role="radio" aria-checked="false" disabled className={styles.shapeCard} title="Not supported by the engine yet"><strong>Tee</strong><small>coming later</small></button>
+              <button type="button" role="radio" aria-checked="false" disabled className={styles.shapeCard} title="Not supported by the engine yet"><strong>Circle</strong><small>coming later</small></button>
+            </div>
+            <div className={styles.rows}>
+              <NumberField label="Width" symbol="b" invalid={!(width > 0)} unit="mm" value={section.width_mm} min={0} onChange={(value) => setGeometry("width_mm", value)} />
+              <NumberField label="Total depth" symbol="D" invalid={!(depth > 0)} unit="mm" value={section.depth_mm} min={0} onChange={(value) => setGeometry("depth_mm", value)} />
+            </div>
+          </fieldset>
+
+          <fieldset className={styles.group} disabled={disabled}>
+            <legend><i>02</i>Reinforcement · {bars.length} bars · As = {fmt(steelArea, 0)} mm²{validShape ? ` · ${fmt((100 * steelArea) / (width * depth), 2)}%` : ""}</legend>
+            <div className={styles.modeSwitch} role="tablist" aria-label="Reinforcement input">
+              <button type="button" role="tab" aria-selected={mode === "cage"} className={mode === "cage" ? styles.modeActive : styles.modeTab} onClick={switchToCage}>Cage</button>
+              <button type="button" role="tab" aria-selected={mode === "custom"} className={mode === "custom" ? styles.modeActive : styles.modeTab} onClick={() => setMode("custom")}>Custom bars</button>
+            </div>
+            {mode === "cage" ? (
+              <div className={styles.rows}>
+                <NumberField label="Clear cover" symbol="c" unit="mm" value={cage.cover} min={0} onChange={(value) => updateCage({ cover: value })} hint="To the tie, all faces" />
+                <label className={styles.row}>
+                  <span className={styles.rowLabel}>Tie / stirrup size</span>
+                  <span className={styles.rowSymbol}>Ø<sub>t</sub></span>
+                  <select value={cage.tie} onChange={(event) => updateCage({ tie: event.target.value })}>
+                    {[0, 6, 10, 12, 16].map((size) => <option key={size} value={size}>{size || "none"}</option>)}
+                  </select>
+                  <span className={styles.rowUnit}>mm</span>
+                </label>
+                <BarsRow label="Bottom bars" count={cage.bottomCount} diameter={cage.bottomDia} onCount={(value) => updateCage({ bottomCount: value })} onDiameter={(value) => updateCage({ bottomDia: value })} />
+                <BarsRow label="Top bars" count={cage.topCount} diameter={cage.topDia} onCount={(value) => updateCage({ topCount: value })} onDiameter={(value) => updateCage({ topDia: value })} />
+                <BarsRow label="Side bars per face" count={cage.sideCount} diameter={cage.sideDia} onCount={(value) => updateCage({ sideCount: value })} onDiameter={(value) => updateCage({ sideDia: value })} />
+                {cageResult?.error ? <p className={styles.warning}>{cageResult.error}</p> : <p className={styles.note}>Bar centres sit at cover + tie + Ø/2. Spacing and detailing are not checked; switch to Custom bars to fine-tune.</p>}
+              </div>
+            ) : (
+              <>
+                {bars.length ? <button type="button" className={styles.textButton} onClick={() => { setBars([]); setSelectedBar(null); }}>Remove all bars</button> : null}
+        <div className={styles.barTable} role="table" aria-label="Reinforcing bars">
+          <div className={styles.barHead} role="row"><span>ID</span><span>Area mm²</span><span>x mm</span><span>y mm</span><span>Ø eq.</span><span /></div>
+          {bars.map((bar, index) => (
+            <div key={index} role="row" className={selectedBar === index ? styles.barRowSelected : styles.barRow} onFocus={() => setSelectedBar(index)}>
+              <input aria-label={`Bar ${index + 1} ID`} value={String(bar.id ?? "")} maxLength={40} onChange={(event) => setBars(bars.map((row, i) => i === index ? { ...row, id: event.target.value } : row))} />
+              {(["area_mm2", "x_mm", "y_mm"] as const).map((key) => (
+                <input key={key} aria-label={`Bar ${index + 1} ${key}`} type="number" step="any" value={String(bar[key] ?? "")} onChange={(event) => setBars(bars.map((row, i) => i === index ? { ...row, [key]: event.target.value } : row))} />
+              ))}
+              <span>{fmt(barDiameterFromArea(num(bar.area_mm2)), 1)}</span>
+              <button type="button" aria-label={`Remove bar ${String(bar.id ?? index + 1)}`} onClick={() => { setBars(bars.filter((_, i) => i !== index)); setSelectedBar(null); }}>×</button>
+            </div>
+          ))}
+          {!bars.length ? <p className={styles.note}>At least one bar is required. Add a layer or click the section.</p> : null}
+        </div>
+        {selected ? <p className={styles.note}>Selected {String(selected.id)} · Ø{fmt(barDiameterFromArea(num(selected.area_mm2)), 1)} at ({fmt(num(selected.x_mm), 0)}, {fmt(num(selected.y_mm), 0)}) mm</p> : null}
+        {outsideBars.length ? <p className={styles.warning}>Bars outside the concrete outline: {outsideBars.map((bar) => String(bar.id)).join(", ")}.</p> : null}
+        {duplicateIds.length ? <p className={styles.warning}>Bar IDs must be unique: {[...new Set(duplicateIds)].join(", ")}.</p> : null}
+              </>
+            )}
+          </fieldset>
+
+          <fieldset className={styles.group} disabled={disabled}>
+            <legend><i>03</i>Materials</legend>
+            <p className={styles.subhead}>Concrete</p>
+            <div className={styles.rows}>
+            <NumberField label="Compressive strength" symbol="f′c" unit="MPa" value={concrete.compressive_strength_mpa} onChange={(value) => setGroup("concrete", "compressive_strength_mpa", value)} />
+            <NumberField label="Elastic modulus" symbol="Ec" unit="MPa" value={concrete.elastic_modulus_mpa} onChange={(value) => setGroup("concrete", "elastic_modulus_mpa", value)} />
+            <NumberField label="Stress block intensity" symbol="α" value={concrete.stress_block_alpha} onChange={(value) => setGroup("concrete", "stress_block_alpha", value)} />
+            <NumberField label="Stress block depth" symbol="γ" value={concrete.stress_block_gamma} onChange={(value) => setGroup("concrete", "stress_block_gamma", value)} />
+            <NumberField label="Ultimate compressive strain" symbol="εcu" value={concrete.ultimate_compressive_strain} onChange={(value) => setGroup("concrete", "ultimate_compressive_strain", value)} />
+            <NumberField label="Density" symbol="ρc" unit="kg/m³" value={concrete.density_kg_m3} onChange={(value) => setGroup("concrete", "density_kg_m3", value)} />
+            </div>
+            <p className={styles.subhead}>Reinforcement</p>
+            <div className={styles.rows}>
+            <NumberField label="Yield strength" symbol="fsy" unit="MPa" value={steel.yield_strength_mpa} onChange={(value) => setGroup("steel", "yield_strength_mpa", value)} />
+            <NumberField label="Elastic modulus" symbol="Es" unit="MPa" value={steel.elastic_modulus_mpa} onChange={(value) => setGroup("steel", "elastic_modulus_mpa", value)} />
+            <NumberField label="Fracture strain" symbol="εsu" value={steel.fracture_strain} onChange={(value) => setGroup("steel", "fracture_strain", value)} />
+            <NumberField label="Density" symbol="ρs" unit="kg/m³" value={steel.density_kg_m3} onChange={(value) => setGroup("steel", "density_kg_m3", value)} />
+            </div>
+            <p className={styles.note}>Coefficients are supplied explicitly. No AS 3600 values are derived from f′c.</p>
+          </fieldset>
+
+          <fieldset className={styles.group} disabled={disabled}>
+            <legend><i>04</i>Section response actions</legend>
+            <NumberField label="Axial force" symbol="N" unit="kN" value={values.axial_force_kn} onChange={(value) => onChange({ ...values, axial_force_kn: value })} hint="Positive compression; negative tension." />
+            <label className={styles.field}>
+              <span>Neutral-axis angle<em>deg</em></span>
+              <div className={styles.angleRow}>
+                <input type="range" min={-180} max={180} step={5} value={Number.isFinite(angle) ? angle : 0} onChange={(event) => onChange({ ...values, bending_angle_deg: Number(event.target.value) })} aria-label="Neutral-axis angle slider" />
+                <input type="number" min={-180} max={180} step="any" value={String(values.bending_angle_deg ?? "")} onChange={(event) => onChange({ ...values, bending_angle_deg: event.target.value })} aria-label="Neutral-axis angle" />
+              </div>
+              <div className={styles.chips}>
+                {[[0, "Top"], [180, "Bottom"], [90, "Left"], [-90, "Right"]].map(([value, label]) => (
+                  <button type="button" key={value} className={angle === value ? styles.chipActive : styles.chip} onClick={() => onChange({ ...values, bending_angle_deg: value })}>{label} in compression</button>
+                ))}
+              </div>
+            </label>
+          </fieldset>
+        </div>
+
+        <div className={styles.outputColumn}>
+          <section className={styles.panel}>
+            <header className={styles.panelHead}><small>Geometry</small><strong>Section preview</strong></header>
+            <figure className={styles.canvasCard}>
           <svg
             ref={svgRef}
             className={styles.sectionCanvas}
@@ -291,104 +471,34 @@ export function ConcreteSectionEditor({ values, onChange, result, resultCurrent,
               </g>
             </> : <>
               <text x="200" y="140" textAnchor="middle" className={styles.emptyCanvas}>Enter a width and depth to draw the section</text>
-              <text x="200" y="164" textAnchor="middle" className={styles.emptyCanvasHint}>or use “Load illustrative example” above</text>
+              <text x="200" y="164" textAnchor="middle" className={styles.emptyCanvasHint}>or load the illustrative example</text>
             </>}
           </svg>
           <figcaption className={styles.canvasLegend}>
             <label className={styles.placeField}>Click to place Ø
               <input type="number" min={0} step="any" value={placeDiameter} onChange={(event) => setPlaceDiameter(event.target.value)} aria-label="Diameter of bars placed by clicking" disabled={disabled} />
-              mm bars · drag to move · Delete removes the selected bar
+              mm · drag to move · Delete removes{mode === "cage" ? " · editing switches to custom bars" : ""}
             </label>
             {overlay ? <span><i className={styles.legendZone} /> compression zone {resultCurrent ? "" : "(previous inputs)"}</span> : null}
             {centroid ? <span><i className={styles.legendCentroid} /> elastic centroid</span> : null}
           </figcaption>
-        </figure>
-
-        <div className={styles.sideFields}>
-          <fieldset className={styles.group} disabled={disabled}>
-            <legend><i>1</i>Geometry</legend>
-            <div className={styles.rows}>
-              <NumberField label="Width" symbol="b" unit="mm" value={section.width_mm} min={0} onChange={(value) => setSection({ width_mm: value })} />
-              <NumberField label="Depth" symbol="D" unit="mm" value={section.depth_mm} min={0} onChange={(value) => setSection({ depth_mm: value })} />
-            </div>
-          </fieldset>
-          <fieldset className={styles.group} disabled={disabled}>
-            <legend><i>4</i>Actions</legend>
-            <NumberField label="Axial force" symbol="N" unit="kN" value={values.axial_force_kn} onChange={(value) => onChange({ ...values, axial_force_kn: value })} hint="Positive compression; negative tension." />
-            <label className={styles.field}>
-              <span>Neutral-axis angle<em>deg</em></span>
-              <div className={styles.angleRow}>
-                <input type="range" min={-180} max={180} step={5} value={Number.isFinite(angle) ? angle : 0} onChange={(event) => onChange({ ...values, bending_angle_deg: Number(event.target.value) })} aria-label="Neutral-axis angle slider" />
-                <input type="number" min={-180} max={180} step="any" value={String(values.bending_angle_deg ?? "")} onChange={(event) => onChange({ ...values, bending_angle_deg: event.target.value })} aria-label="Neutral-axis angle" />
-              </div>
-              <div className={styles.chips}>
-                {[[0, "Top"], [180, "Bottom"], [90, "Left"], [-90, "Right"]].map(([value, label]) => (
-                  <button type="button" key={value} className={angle === value ? styles.chipActive : styles.chip} onClick={() => onChange({ ...values, bending_angle_deg: value })}>{label} in compression</button>
-                ))}
-              </div>
-            </label>
-          </fieldset>
+            </figure>
+          </section>
+          {aside}
         </div>
-      </div>
-
-      <fieldset className={styles.group} disabled={disabled}>
-        <legend><i>2</i>Reinforcement · {bars.length} bars · As = {fmt(steelArea, 0)} mm²{validShape ? ` · ${fmt((100 * steelArea) / (width * depth), 2)}% of gross` : ""}</legend>
-        {bars.length ? <button type="button" className={styles.textButton} onClick={() => { setBars([]); setSelectedBar(null); }}>Remove all bars</button> : null}
-        <div className={styles.layerTools}>
-          <NumberField compact label="Bars" value={layer.count} step="1" min={1} onChange={(value) => setLayer({ ...layer, count: value })} />
-          <NumberField compact label="Bar Ø" unit="mm" value={layer.diameter} min={0} onChange={(value) => { setLayer({ ...layer, diameter: value }); setPlaceDiameter(value); }} />
-          <NumberField compact label="Face to bar centre" unit="mm" value={layer.edge} min={0} onChange={(value) => setLayer({ ...layer, edge: value })} />
-          <label className={styles.field}><span>Face</span>
-            <select value={layer.face} onChange={(event) => setLayer({ ...layer, face: event.target.value as "top" | "bottom" })}><option value="bottom">Bottom</option><option value="top">Top</option></select>
-          </label>
-          <button type="button" className={styles.secondaryButton} onClick={addLayer} disabled={!validShape}>Add layer</button>
-        </div>
-        <BarSizeChips value={layer.diameter} disabled={disabled} onPick={(size) => { setLayer({ ...layer, diameter: size }); setPlaceDiameter(size); }} />
-        <p className={styles.note}>Ø is converted to area as πØ²/4. Bars are placed at the entered centre distance from both side faces and the chosen face; check cover separately.</p>
-        <div className={styles.barTable} role="table" aria-label="Reinforcing bars">
-          <div className={styles.barHead} role="row"><span>ID</span><span>Area mm²</span><span>x mm</span><span>y mm</span><span>Ø eq.</span><span /></div>
-          {bars.map((bar, index) => (
-            <div key={index} role="row" className={selectedBar === index ? styles.barRowSelected : styles.barRow} onFocus={() => setSelectedBar(index)}>
-              <input aria-label={`Bar ${index + 1} ID`} value={String(bar.id ?? "")} maxLength={40} onChange={(event) => setBars(bars.map((row, i) => i === index ? { ...row, id: event.target.value } : row))} />
-              {(["area_mm2", "x_mm", "y_mm"] as const).map((key) => (
-                <input key={key} aria-label={`Bar ${index + 1} ${key}`} type="number" step="any" value={String(bar[key] ?? "")} onChange={(event) => setBars(bars.map((row, i) => i === index ? { ...row, [key]: event.target.value } : row))} />
-              ))}
-              <span>{fmt(barDiameterFromArea(num(bar.area_mm2)), 1)}</span>
-              <button type="button" aria-label={`Remove bar ${String(bar.id ?? index + 1)}`} onClick={() => { setBars(bars.filter((_, i) => i !== index)); setSelectedBar(null); }}>×</button>
-            </div>
-          ))}
-          {!bars.length ? <p className={styles.note}>At least one bar is required. Add a layer or click the section.</p> : null}
-        </div>
-        {selected ? <p className={styles.note}>Selected {String(selected.id)} · Ø{fmt(barDiameterFromArea(num(selected.area_mm2)), 1)} at ({fmt(num(selected.x_mm), 0)}, {fmt(num(selected.y_mm), 0)}) mm</p> : null}
-        {outsideBars.length ? <p className={styles.warning}>Bars outside the concrete outline: {outsideBars.map((bar) => String(bar.id)).join(", ")}.</p> : null}
-        {duplicateIds.length ? <p className={styles.warning}>Bar IDs must be unique: {[...new Set(duplicateIds)].join(", ")}.</p> : null}
-      </fieldset>
-
-      <div className={styles.grid2}>
-        <fieldset className={styles.group} disabled={disabled}>
-          <legend><i>3</i>Concrete model</legend>
-          <div className={styles.rows}>
-            <NumberField label="Compressive strength" symbol="f′c" unit="MPa" value={concrete.compressive_strength_mpa} onChange={(value) => setGroup("concrete", "compressive_strength_mpa", value)} />
-            <NumberField label="Elastic modulus" symbol="Ec" unit="MPa" value={concrete.elastic_modulus_mpa} onChange={(value) => setGroup("concrete", "elastic_modulus_mpa", value)} />
-            <NumberField label="Stress block intensity" symbol="α" value={concrete.stress_block_alpha} onChange={(value) => setGroup("concrete", "stress_block_alpha", value)} />
-            <NumberField label="Stress block depth" symbol="γ" value={concrete.stress_block_gamma} onChange={(value) => setGroup("concrete", "stress_block_gamma", value)} />
-            <NumberField label="Ultimate compressive strain" symbol="εcu" value={concrete.ultimate_compressive_strain} onChange={(value) => setGroup("concrete", "ultimate_compressive_strain", value)} />
-            <NumberField label="Density" symbol="ρc" unit="kg/m³" value={concrete.density_kg_m3} onChange={(value) => setGroup("concrete", "density_kg_m3", value)} />
-          </div>
-          <p className={styles.note}>Coefficients are supplied explicitly. No AS 3600 values are derived from f′c.</p>
-        </fieldset>
-        <fieldset className={styles.group} disabled={disabled}>
-          <legend><i>3</i>Reinforcement steel model</legend>
-          <div className={styles.rows}>
-            <NumberField label="Yield strength" symbol="fsy" unit="MPa" value={steel.yield_strength_mpa} onChange={(value) => setGroup("steel", "yield_strength_mpa", value)} />
-            <NumberField label="Elastic modulus" symbol="Es" unit="MPa" value={steel.elastic_modulus_mpa} onChange={(value) => setGroup("steel", "elastic_modulus_mpa", value)} />
-            <NumberField label="Fracture strain" symbol="εsu" value={steel.fracture_strain} onChange={(value) => setGroup("steel", "fracture_strain", value)} />
-            <NumberField label="Density" symbol="ρs" unit="kg/m³" value={steel.density_kg_m3} onChange={(value) => setGroup("steel", "density_kg_m3", value)} />
-          </div>
-        </fieldset>
       </div>
     </div>
   );
+}
+
+export function concreteChips(result: ConcreteSectionResult): SheetChip[] {
+  const ultimate = result.ultimate;
+  return [
+    { label: "Mu nominal", value: `${fmt(num(ultimate.resultant_moment_knm))} kN·m`, tone: "info" },
+    { label: "dn", value: `${fmt(num(ultimate.neutral_axis_depth_mm), 0)} mm`, tone: "info" },
+    { label: "εs,max", value: fmt(num(ultimate.maximum_steel_strain), 4), tone: "info" },
+    { label: "Code check", value: "Not included", tone: "info" },
+  ];
 }
 
 export function ConcreteSectionResults({ result }: { result: ConcreteSectionResult }) {
@@ -396,22 +506,20 @@ export function ConcreteSectionResults({ result }: { result: ConcreteSectionResu
   const ultimate = result.ultimate;
   return (
     <div className={styles.results}>
-      <div className={styles.metricHero}>
-        <span>Nominal moment capacity · resultant</span>
-        <strong>{fmt(num(ultimate.resultant_moment_knm))} <small>kN·m</small></strong>
-        <em>at N = {fmt(num(ultimate.axial_force_kn), 2)} kN · angle {fmt(num(ultimate.bending_angle_deg), 1)}°</em>
-      </div>
-      <dl className={styles.metricList}>
-        <div><dt>Mx</dt><dd>{fmt(num(ultimate.moment_x_knm))} kN·m</dd></div>
-        <div><dt>My</dt><dd>{fmt(num(ultimate.moment_y_knm))} kN·m</dd></div>
-        <div><dt>Neutral-axis depth</dt><dd>{fmt(num(ultimate.neutral_axis_depth_mm))} mm</dd></div>
-        <div><dt>Max steel strain</dt><dd>{fmt(num(ultimate.maximum_steel_strain), 4)}</dd></div>
-        <div><dt>Axial equilibrium error</dt><dd>{fmt(num(ultimate.axial_equilibrium_error_kn), 3)} kN</dd></div>
-        <div><dt>Steel area</dt><dd>{fmt(num(gross.steel_area_mm2), 0)} mm²</dd></div>
-        <div><dt>Elastic centroid</dt><dd>({fmt(num(gross.elastic_centroid_x_mm))}, {fmt(num(gross.elastic_centroid_y_mm))}) mm</dd></div>
-        <div><dt>EIxx · EIyy</dt><dd>{fmt(num(gross.ei_xx_n_mm2) / 1e12, 2)} · {fmt(num(gross.ei_yy_n_mm2) / 1e12, 2)} ×10¹² N·mm²</dd></div>
-        <div><dt>Mass</dt><dd>{fmt(num(gross.mass_per_length_kg_m))} kg/m</dd></div>
-      </dl>
+      <SummaryCard title="Ultimate bending · nominal">
+        <SummaryRow label="Moment capacity (resultant)" symbol={<>M<sub>u</sub></>} value={fmt(num(ultimate.resultant_moment_knm))} unit="kN·m" />
+        <SummaryRow label="Moment about x" symbol={<>M<sub>x</sub></>} value={fmt(num(ultimate.moment_x_knm))} unit="kN·m" />
+        <SummaryRow label="Moment about y" symbol={<>M<sub>y</sub></>} value={fmt(num(ultimate.moment_y_knm))} unit="kN·m" />
+        <SummaryRow label="Neutral-axis depth" symbol={<>d<sub>n</sub></>} value={fmt(num(ultimate.neutral_axis_depth_mm))} unit="mm" />
+        <SummaryRow label="Maximum steel strain" symbol={<>ε<sub>s,max</sub></>} value={fmt(num(ultimate.maximum_steel_strain), 4)} />
+        <SummaryRow label="Axial force · equilibrium error" symbol="N" value={`${fmt(num(ultimate.axial_force_kn), 2)} · ${fmt(num(ultimate.axial_equilibrium_error_kn), 3)}`} unit="kN" />
+      </SummaryCard>
+      <SummaryCard title="Gross section">
+        <SummaryRow label="Steel area" symbol={<>A<sub>s</sub></>} value={fmt(num(gross.steel_area_mm2), 0)} unit="mm²" />
+        <SummaryRow label="Elastic centroid" symbol={<>x̄, ȳ</>} value={`${fmt(num(gross.elastic_centroid_x_mm))}, ${fmt(num(gross.elastic_centroid_y_mm))}`} unit="mm" />
+        <SummaryRow label="Flexural rigidity" symbol={<>EI<sub>xx</sub>, EI<sub>yy</sub></>} value={`${fmt(num(gross.ei_xx_n_mm2) / 1e12, 2)}, ${fmt(num(gross.ei_yy_n_mm2) / 1e12, 2)}`} unit="×10¹² N·mm²" />
+        <SummaryRow label="Mass" symbol="m" value={fmt(num(gross.mass_per_length_kg_m))} unit="kg/m" />
+      </SummaryCard>
       {[...result.warnings, ...result.limitations].length ? (
         <details className={styles.limits}>
           <summary>Scope and limitations · {result.warnings.length + result.limitations.length}</summary>
@@ -480,7 +588,7 @@ export const STEEL_AXIAL_EXAMPLE: Values = {
   compression_action_kn: 135,
 };
 
-export function SteelAxialEditor({ values, onChange, disabled }: { values: Values; onChange: (next: Values) => void; disabled?: boolean }) {
+export function SteelAxialEditor({ values, onChange, disabled, aside }: { values: Values; onChange: (next: Values) => void; disabled?: boolean; aside?: ReactNode }) {
   const set = (key: string) => (value: string) => onChange({ ...values, [key]: value });
   const ag = num(values.gross_area_mm2);
   const an = num(values.net_area_mm2);
@@ -492,106 +600,68 @@ export function SteelAxialEditor({ values, onChange, disabled }: { values: Value
   ].filter(Boolean);
   return (
     <div className={styles.editor}>
-      <div className={styles.editorHeading}>
-        <div>
-          <p className={styles.kicker}>Section axial capacity</p>
-          <h3>Steel tension and compression section checks</h3>
-        </div>
-        <button type="button" className={styles.ghostButton} disabled={disabled} onClick={() => onChange({ ...STEEL_AXIAL_EXAMPLE })}>Load illustrative example</button>
+      <div className={styles.appLayout}>
+      <div className={styles.inputColumn}>
+      <div className={styles.columnHead}>
+        <span>Inputs</span>
+        <button type="button" className={styles.ghostButton} disabled={disabled} onClick={() => onChange({ ...STEEL_AXIAL_EXAMPLE })}>Load example</button>
       </div>
       <div className={styles.sheet}>
         <fieldset className={styles.group} disabled={disabled}>
-          <legend><i>1</i>Section</legend>
+          <legend><i>01</i>Section</legend>
           <NumberField label="Gross area" symbol="Ag" unit="mm²" value={values.gross_area_mm2} min={0} onChange={set("gross_area_mm2")} />
-          <NumberField label="Net area" symbol="An" unit="mm²" value={values.net_area_mm2} min={0} onChange={set("net_area_mm2")} hint={ag > 0 && an > 0 ? `An / Ag = ${fmt(an / ag, 3)}` : "Deduct holes and penetrations."} />
+          <NumberField label="Net area" symbol="An" invalid={an > ag} unit="mm²" value={values.net_area_mm2} min={0} onChange={set("net_area_mm2")} hint={ag > 0 && an > 0 ? `An / Ag = ${fmt(an / ag, 3)}` : "Deduct holes and penetrations."} />
         </fieldset>
         <fieldset className={styles.group} disabled={disabled}>
-          <legend><i>2</i>Material</legend>
+          <legend><i>02</i>Material</legend>
           <NumberField label="Yield strength" symbol="fy" unit="MPa" value={values.yield_strength_mpa} min={0} onChange={set("yield_strength_mpa")} />
-          <NumberField label="Tensile strength" symbol="fu" unit="MPa" value={values.ultimate_strength_mpa} min={0} onChange={set("ultimate_strength_mpa")} hint="Use values for the actual product and thickness; a grade label alone is insufficient." />
+          <NumberField label="Tensile strength" symbol="fu" invalid={fu < fy} unit="MPa" value={values.ultimate_strength_mpa} min={0} onChange={set("ultimate_strength_mpa")} hint="Use values for the actual product and thickness; a grade label alone is insufficient." />
         </fieldset>
         <fieldset className={styles.group} disabled={disabled}>
-          <legend><i>3</i>Assessed factors</legend>
+          <legend><i>03</i>Assessed factors</legend>
           <NumberField label="Tension distribution factor" symbol="kt" value={values.tension_distribution_factor} min={0} max={1} onChange={set("tension_distribution_factor")} hint="Assessed for the end connection; no default is applied." />
           <NumberField label="Form factor" symbol="kf" value={values.compression_form_factor} min={0} max={1} onChange={set("compression_form_factor")} hint="Assessed for local buckling of the section; no default is applied." />
         </fieldset>
         <fieldset className={styles.group} disabled={disabled}>
-          <legend><i>4</i>Design actions</legend>
+          <legend><i>04</i>Design actions</legend>
           <NumberField label="Design tension" symbol="N*t" unit="kN" value={values.tension_action_kn} min={0} onChange={set("tension_action_kn")} />
           <NumberField label="Design compression" symbol="N*c" unit="kN" value={values.compression_action_kn} min={0} onChange={set("compression_action_kn")} hint="Factored magnitudes, entered as nonnegative values." />
         </fieldset>
       </div>
       {issues.map((issue) => <p className={styles.warning} key={issue}>{issue}</p>)}
-      <p className={styles.note}>Section capacity only. Member buckling, bending, shear, combined actions and connections are outside this calculation.</p>
+      </div>
+      <div className={styles.outputColumn}>{aside}</div>
+      </div>
     </div>
   );
 }
 
-function UtilisationCard({ title, check, extra }: { title: string; check: AxialCheck; extra?: ReactNode }) {
-  const pass = check.section_capacity_satisfied;
-  const width = Math.min(Math.max(check.utilisation, 0), 1.25) / 1.25 * 100;
-  return (
-    <article className={pass ? styles.checkCard : `${styles.checkCard} ${styles.checkFail}`}>
-      <header>
-        <strong>{title}</strong>
-        <span className={pass ? styles.passPill : styles.failPill}>{pass ? "Satisfied" : "Exceeded"}</span>
-      </header>
-      <div className={styles.utilTrack} role="meter" aria-valuemin={0} aria-valuemax={1.25} aria-valuenow={check.utilisation} aria-label={`${title} utilisation`}>
-        <div className={styles.utilFill} style={{ width: `${width}%` }} />
-        <i className={styles.utilLimit} style={{ left: `${100 / 1.25}%` }} />
-      </div>
-      <p className={styles.utilValue}>{fmt(check.utilisation, 3)} <small>utilisation</small></p>
-      <dl className={styles.metricList}>
-        <div><dt>Action</dt><dd>{fmt(check.action_kn)} kN</dd></div>
-        <div><dt>Design capacity φN</dt><dd>{fmt(check.design_capacity_kn)} kN</dd></div>
-        <div><dt>Nominal capacity</dt><dd>{fmt(check.nominal_capacity_kn)} kN</dd></div>
-        <div><dt>Governing mode</dt><dd>{check.governing_mode}</dd></div>
-      </dl>
-      {extra}
-    </article>
-  );
-}
-
-function CheckSummary({ checks }: { checks: Array<{ name: string; reference: string; check: AxialCheck }> }) {
-  const failing = checks.filter((item) => !item.check.section_capacity_satisfied);
-  return (
-    <div className={styles.summaryTable} role="table" aria-label="Check summary">
-      <div className={`${styles.summaryBanner} ${failing.length ? styles.summaryFail : styles.summaryPass}`} role="row">
-        <i className={styles.summaryDot} aria-hidden="true" />
-        {failing.length ? `${failing.length} of ${checks.length} checks exceeded` : `All ${checks.length} section checks satisfied`}
-      </div>
-      {checks.map(({ name, reference, check }) => {
-        const pass = check.section_capacity_satisfied;
-        return (
-          <div className={styles.summaryRow} role="row" key={name}>
-            <span>{name}<small>{reference} · {check.governing_mode}</small></span>
-            <div className={`${styles.utilTrack} ${pass ? "" : styles.checkFail}`} aria-hidden="true">
-              <div className={styles.utilFill} style={{ width: `${Math.min(Math.max(check.utilisation, 0), 1) * 100}%` }} />
-            </div>
-            <span className={styles.summaryPct}>{fmt(check.utilisation * 100, 0)}%</span>
-            <span className={pass ? styles.passPill : styles.failPill}>{pass ? "OK" : "Exceeded"}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
+export function steelChips(result: SteelAxialResult): SheetChip[] {
+  const governing = Math.max(result.tension.utilisation, result.compression.utilisation);
+  const tone = (utilisation: number) => (utilisation <= 1 ? "pass" : "fail") as SheetChip["tone"];
+  return [
+    { label: "Tension", value: `${fmt(result.tension.utilisation * 100, 0)}%`, tone: tone(result.tension.utilisation) },
+    { label: "Compression", value: `${fmt(result.compression.utilisation * 100, 0)}%`, tone: tone(result.compression.utilisation) },
+    { label: "Governing", value: `${fmt(governing * 100, 0)}%`, tone: tone(governing) },
+  ];
 }
 
 export function SteelAxialResults({ result }: { result: SteelAxialResult }) {
   return (
     <div className={styles.results}>
-      <CheckSummary checks={[
-        { name: "Tension · section", reference: "Cl. 7.2", check: result.tension },
-        { name: "Compression · section", reference: "Cl. 6.2.1", check: result.compression },
-      ]} />
+      <SummaryCard title="Tension · Cl. 7.2">
+        <SummaryRow label="Design tension" symbol={<>N*<sub>t</sub></>} value={fmt(result.tension.action_kn)} unit="kN" />
+        <SummaryRow label="Gross section yielding" symbol={<>N<sub>t,y</sub></>} value={fmt(result.tension_nominal_modes_kn.gross_yielding)} unit="kN" />
+        <SummaryRow label="Net section fracture" symbol={<>N<sub>t,f</sub></>} value={fmt(result.tension_nominal_modes_kn.net_fracture)} unit="kN" />
+        <SummaryRow label="Design tension capacity" symbol={<>φN<sub>t</sub></>} value={fmt(result.tension.design_capacity_kn)} unit="kN" utilisation={result.tension.utilisation} />
+        <p className={styles.note}>Governed by {result.tension.governing_mode}.</p>
+      </SummaryCard>
+      <SummaryCard title="Compression · Cl. 6.2.1">
+        <SummaryRow label="Design compression" symbol={<>N*<sub>c</sub></>} value={fmt(result.compression.action_kn)} unit="kN" />
+        <SummaryRow label="Nominal section capacity" symbol={<>N<sub>s</sub></>} value={fmt(result.compression.nominal_capacity_kn)} unit="kN" />
+        <SummaryRow label="Design section capacity" symbol={<>φN<sub>s</sub></>} value={fmt(result.compression.design_capacity_kn)} unit="kN" utilisation={result.compression.utilisation} />
+      </SummaryCard>
       <p className={styles.note}>{result.standard} · {result.scope} · φ = {fmt(result.capacity_factor, 2)}</p>
-      <details className={styles.checkDetails}>
-        <summary>Check details · capacities and governing modes</summary>
-        <UtilisationCard title="Tension" check={result.tension} extra={
-          <p className={styles.note}>Gross yielding {fmt(result.tension_nominal_modes_kn.gross_yielding)} kN · net fracture {fmt(result.tension_nominal_modes_kn.net_fracture)} kN</p>
-        } />
-        <UtilisationCard title="Compression · section" check={result.compression} />
-      </details>
       {result.warnings.length ? (
         <details className={styles.limits}>
           <summary>Scope and limitations · {result.warnings.length}</summary>

@@ -99,3 +99,62 @@ export function neutralAxisGeometry(width: number, depth: number, angleDeg: numb
   const axis = zone.filter((point) => Math.abs(point.x * normal.x + point.y * normal.y - offset) < 1e-6);
   return { normal, zone, axis: axis.length >= 2 ? [axis[0], axis[axis.length - 1]] as const : null };
 }
+
+export type CageInput = {
+  width: number;
+  depth: number;
+  coverMm: number;
+  tieMm: number;
+  bottom: { count: number; diameterMm: number };
+  top: { count: number; diameterMm: number };
+  sidePerFace: number;
+  sideDiameterMm: number;
+};
+
+/**
+ * Bars for a rectangular cage from counts and sizes, measured to the bar centre as
+ * cover + tie + Ø/2 from each face. Side bars are spaced evenly between the top and bottom
+ * rows. Geometry only: cover, spacing and detailing adequacy are not checked here.
+ */
+export function cageBars(input: CageInput): { bars: SectionBar[]; error: string } {
+  const { width, depth, coverMm, tieMm, bottom, top, sidePerFace, sideDiameterMm } = input;
+  if (!(width > 0 && depth > 0)) return { bars: [], error: "Enter the section width and depth." };
+  if (!(coverMm >= 0 && tieMm >= 0)) return { bars: [], error: "Cover and tie size must be zero or more." };
+  const counts = [bottom.count, top.count, sidePerFace];
+  if (!counts.every((count) => Number.isInteger(count) && count >= 0)) return { bars: [], error: "Bar counts must be whole numbers." };
+  if (bottom.count + top.count + 2 * sidePerFace === 0) return { bars: [], error: "Add at least one bar." };
+
+  const rows: SectionBar[] = [];
+  const row = (prefix: string, count: number, diameter: number, y: number) => {
+    if (!count) return null;
+    if (!(diameter > 0)) return `Choose a ${prefix === "B" ? "bottom" : "top"} bar size.`;
+    const inset = coverMm + tieMm + diameter / 2;
+    if (2 * inset > width || count * diameter > width - 2 * (coverMm + tieMm)) return `The ${prefix === "B" ? "bottom" : "top"} bars do not fit across the width.`;
+    for (let index = 0; index < count; index += 1) {
+      const x = count === 1 ? width / 2 : inset + ((width - 2 * inset) * index) / (count - 1);
+      rows.push({ id: `${prefix}${index + 1}`, area_mm2: barAreaFromDiameter(diameter), x_mm: Number(x.toFixed(1)), y_mm: Number(y.toFixed(1)) });
+    }
+    return null;
+  };
+  const yBottom = coverMm + tieMm + bottom.diameterMm / 2;
+  const yTop = depth - (coverMm + tieMm + top.diameterMm / 2);
+  const error = row("B", bottom.count, bottom.diameterMm, yBottom) ?? row("T", top.count, top.diameterMm, yTop);
+  if (error) return { bars: [], error };
+  if (yTop <= yBottom && bottom.count && top.count) return { bars: [], error: "The top and bottom bars overlap; increase the depth or reduce the cover." };
+
+  if (sidePerFace) {
+    if (!(sideDiameterMm > 0)) return { bars: [], error: "Choose a side bar size." };
+    const x = coverMm + tieMm + sideDiameterMm / 2;
+    const low = bottom.count ? yBottom : coverMm + tieMm + sideDiameterMm / 2;
+    const high = top.count ? yTop : depth - (coverMm + tieMm + sideDiameterMm / 2);
+    let id = 1;
+    for (let index = 1; index <= sidePerFace; index += 1) {
+      const y = low + ((high - low) * index) / (sidePerFace + 1);
+      for (const xPosition of [x, width - x]) {
+        rows.push({ id: `S${id}`, area_mm2: barAreaFromDiameter(sideDiameterMm), x_mm: Number(xPosition.toFixed(1)), y_mm: Number(y.toFixed(1)) });
+        id += 1;
+      }
+    }
+  }
+  return { bars: rows, error: "" };
+}
