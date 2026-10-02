@@ -146,7 +146,7 @@ export default async function StructuralProjectPage({ params }: PageProps) {
   }));
 
   return (
-    <main className="dashboard-shell">
+    <main className="dashboard-shell app-shell">
       <WorkspaceHeader
         area="structural"
         canManageApiKeys={membership.role === "owner" || membership.role === "admin"}

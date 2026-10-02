@@ -34,7 +34,7 @@ export default async function StructuralProjectsPage() {
   }
 
   return (
-    <main className="dashboard-shell">
+    <main className="dashboard-shell app-shell">
       <WorkspaceHeader
         area="structural"
         canManageApiKeys={(memberships ?? []).some((item) => item.role === "owner" || item.role === "admin")}

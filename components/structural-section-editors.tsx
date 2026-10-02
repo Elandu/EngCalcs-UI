@@ -92,6 +92,23 @@ function SummaryRow({ label, symbol, value, unit, utilisation }: {
   );
 }
 
+/** Headline result card, styled like the product preview: status pill, big value, trace rows. */
+function ResultHero({ label, value, unit, status, tone, trace }: {
+  label: ReactNode; value: string; unit?: string; status: string; tone: "pass" | "fail" | "info";
+  trace: Array<[string, string]>;
+}) {
+  return (
+    <section className={styles.heroCard}>
+      <span className={tone === "pass" ? styles.heroPass : tone === "fail" ? styles.heroFail : styles.heroInfo}>{status}</span>
+      <small>{label}</small>
+      <div className={styles.heroValue}>{value}{unit ? <span> {unit}</span> : null}</div>
+      {trace.map(([key, text]) => (
+        <div className={styles.traceRow} key={key}><span>{key}</span><b>{text}</b></div>
+      ))}
+    </section>
+  );
+}
+
 function SummaryCard({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className={styles.summaryCard}>
@@ -506,6 +523,18 @@ export function ConcreteSectionResults({ result }: { result: ConcreteSectionResu
   const ultimate = result.ultimate;
   return (
     <div className={styles.results}>
+      <ResultHero
+        label={<>M<sub>u</sub> — nominal moment capacity</>}
+        value={fmt(num(ultimate.resultant_moment_knm))}
+        unit="kN·m"
+        status="NOMINAL"
+        tone="info"
+        trace={[
+          ["Standard", "AS 3600 checks not included"],
+          ["Scope", "Section mechanics"],
+          ["Engine", `${result.solver?.name ?? "concreteproperties"}${result.solver?.version ? ` ${result.solver.version}` : ""}`],
+        ]}
+      />
       <SummaryCard title="Ultimate bending · nominal">
         <SummaryRow label="Moment capacity (resultant)" symbol={<>M<sub>u</sub></>} value={fmt(num(ultimate.resultant_moment_knm))} unit="kN·m" />
         <SummaryRow label="Moment about x" symbol={<>M<sub>x</sub></>} value={fmt(num(ultimate.moment_x_knm))} unit="kN·m" />
@@ -647,8 +676,22 @@ export function steelChips(result: SteelAxialResult): SheetChip[] {
 }
 
 export function SteelAxialResults({ result }: { result: SteelAxialResult }) {
+  const governing = Math.max(result.tension.utilisation, result.compression.utilisation);
+  const governingCheck = result.tension.utilisation >= result.compression.utilisation ? "tension" : "compression";
   return (
     <div className={styles.results}>
+      <ResultHero
+        label={`Governing utilisation — ${governingCheck}`}
+        value={fmt(governing * 100, 0)}
+        unit="%"
+        status={governing <= 1 ? "OK" : "EXCEEDED"}
+        tone={governing <= 1 ? "pass" : "fail"}
+        trace={[
+          ["Standard", result.standard],
+          ["Reference", governingCheck === "tension" ? "Clause 7.2" : "Clause 6.2.1"],
+          ["Scope", "Section axial capacity"],
+        ]}
+      />
       <SummaryCard title="Tension · Cl. 7.2">
         <SummaryRow label="Design tension" symbol={<>N*<sub>t</sub></>} value={fmt(result.tension.action_kn)} unit="kN" />
         <SummaryRow label="Gross section yielding" symbol={<>N<sub>t,y</sub></>} value={fmt(result.tension_nominal_modes_kn.gross_yielding)} unit="kN" />

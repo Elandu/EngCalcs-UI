@@ -1100,7 +1100,7 @@ export function CalculationLauncher({
     </>
   );
   const sectionAside = (
-    <aside className="calculation-output-pane is-embedded" aria-labelledby={outputHeadingId} aria-live="polite">
+    <aside className={`calculation-output-pane is-embedded${savedRun ? "" : " has-no-saved-run"}`} aria-labelledby={outputHeadingId} aria-live="polite">
       {outputPaneContent}
     </aside>
   );
@@ -1110,8 +1110,8 @@ export function CalculationLauncher({
       {guide && selected ? (
         <div className="sheet-bar">
           <div className="sheet-bar-title">
-            <small>{guide.title} · {guide.scope}</small>
-            <strong>{title || guide.title}</strong>
+            <small>{guide.title} / {guide.scope}</small>
+            <input className="sheet-bar-title-input" form={formId} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required aria-label="Calculation title" placeholder="Name this calculation" />
             <span className={`sheet-bar-status is-${busy ? "busy" : preview.current ? "live" : savedRun ? "saved" : "draft"}`}>
               {busy ? "Saving…" : preview.current ? (revisionTarget ? "Live · unsaved changes" : "Live · not saved") : savedRun ? `Saved${savedRun.runSequence ? ` · run ${savedRun.runSequence}` : ""}` : "Draft"}
             </span>
@@ -1123,6 +1123,7 @@ export function CalculationLauncher({
             />
           ) : <span className="sheet-bar-empty">{sectionInputs.error ? `Waiting for inputs · ${sectionInputs.error}` : "Checks appear as soon as the inputs are complete"}</span>}
           <div className="sheet-bar-actions no-print">
+            {!revisionTarget ? <button type="button" className="button button-secondary button-small" onClick={clearInputs}>Clear</button> : null}
             <button type="button" className="button button-secondary button-small" onClick={printReport} title="Print or save as PDF">Print</button>
             <button type="submit" form={formId} className="button button-primary button-small" disabled={busy}>{revisionTarget ? "Save revision" : "Save"}</button>
           </div>
@@ -1182,13 +1183,12 @@ export function CalculationLauncher({
                 </div>
               ) : null}
 
-              <div className="calculation-title-row">
+              {guide ? null : <div className="calculation-title-row">
                 <label>
                   Calculation title
                   <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required placeholder="e.g. Level 2 transfer beam B4" />
                 </label>
-                {isSectionCalculation(selected?.id) && !revisionTarget ? <button type="button" className="button button-secondary button-small" onClick={clearInputs}>Clear inputs</button> : null}
-              </div>
+              </div>}
 
               {selected?.id === AS3600_SECTION_ID ? (
                 <ConcreteSectionEditor

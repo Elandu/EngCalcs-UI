@@ -63,7 +63,7 @@ export default async function DashboardPage() {
 
   if (!memberships?.length) {
     return (
-      <main className="dashboard-shell">
+      <main className="dashboard-shell app-shell">
         <WorkspaceHeader area="projects" trailing={<span className="status-pill">New workspace</span>} />
         <WorkspaceOnboarding userId={userId} />
       </main>
@@ -75,7 +75,7 @@ export default async function DashboardPage() {
   );
 
   return (
-    <main className="dashboard-shell">
+    <main className="dashboard-shell app-shell">
       <WorkspaceHeader
         area="projects"
         canManageApiKeys={memberships.some((membership) => membership.role === "owner" || membership.role === "admin")}

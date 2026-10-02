@@ -57,7 +57,7 @@ export default async function CalculationsPage({
     : "";
 
   return (
-    <main className="dashboard-shell">
+    <main className="dashboard-shell app-shell">
       <WorkspaceHeader
         area="calculations"
         canManageApiKeys={canManageApiKeys}

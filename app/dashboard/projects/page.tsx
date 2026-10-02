@@ -131,7 +131,7 @@ export default async function ProjectsPage({
   const lastResult = Math.min(page * PAGE_SIZE, totalCount);
 
   return (
-    <main className="dashboard-shell">
+    <main className="dashboard-shell app-shell">
       <WorkspaceHeader area="projects" canManageApiKeys={canManageApiKeys} />
       <section className="dashboard-workspace">
         <div className="dashboard-title-row">

@@ -277,3 +277,33 @@
   .appLayout { grid-template-columns: 1fr; }
   .outputColumn { position: static; }
 }
+
+/* ---- Preview-style cards: heading inside the card, quiet value rows ---- */
+.group { border: 1px solid #e2e7e3; border-radius: 10px; background: #fff; padding: 16px 16px 8px; }
+.group legend { float: left; width: 100%; margin: 0 0 8px; padding: 0; color: var(--se-ink); font-size: 14px; font-weight: 800; }
+.group legend + * { clear: both; }
+.group legend i { margin-right: 4px; color: #a3b1aa; }
+.row { min-height: 44px; border-bottom: 1px solid #edf0ee; }
+.rowLabel { color: #5f716a; font-weight: 500; }
+.rowSymbol { color: #8a9a93; font-size: 14px; }
+.row input, .row select, .barsPair input, .barsPair select { border-color: transparent; background: #f6f8f5; color: var(--se-ink); font-weight: 700; text-align: right; }
+.row select, .barsPair select { text-align-last: right; }
+.row input:hover, .row select:hover, .barsPair input:hover, .barsPair select:hover { border-color: #d9dfdb; background: #fff; }
+.row input:focus, .row select:focus, .barsPair input:focus, .barsPair select:focus { border-color: #28664e; background: #fff; outline: 3px solid rgba(40, 102, 78, 0.14); }
+.rowInvalid input { border-color: #e5a090; background: #fff3ef; }
+.panel, .summaryCard { border-color: #e2e7e3; }
+.summaryCard > h4 { color: var(--se-ink); font-size: 13px; font-weight: 800; }
+.summaryLine > span:first-child { color: #5f716a; }
+.heroCard { position: relative; border: 1px solid #e2e7e3; border-radius: 10px; background: #fff; padding: 18px 18px 10px; }
+.heroCard > small { color: #718078; font-size: 13px; }
+.heroValue { margin: 6px 0 14px; color: var(--se-ink); font-size: 44px; font-weight: 800; letter-spacing: -0.05em; line-height: 1; font-variant-numeric: tabular-nums; }
+.heroValue span { color: #65766f; font-size: 15px; font-weight: 600; letter-spacing: 0; }
+.heroPass, .heroFail, .heroInfo { position: absolute; top: 14px; right: 14px; border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; }
+.heroPass { background: #e1f7e9; color: #166846; }
+.heroFail { background: #fde4dd; color: #b3321f; }
+.heroInfo { background: #eef1ee; color: #4c5b55; }
+.traceRow { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid #edf0ee; padding: 8px 0; color: #718078; font-size: 12px; }
+.traceRow b { color: var(--se-ink); text-align: right; }
+.columnHead { color: #718078; }
+.appLayout { grid-template-columns: minmax(360px, 460px) minmax(0, 1fr); }
+.inputColumn .row { grid-template-columns: minmax(0, 1fr) 44px minmax(104px, 130px) 34px; }

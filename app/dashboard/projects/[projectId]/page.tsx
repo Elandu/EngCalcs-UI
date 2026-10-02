@@ -473,38 +473,10 @@ export default async function ProjectPage({
   );
 
   return (
-    <main className="dashboard-shell">
+    <main className="dashboard-shell app-shell">
       <WorkspaceHeader
-        area="projects"
-        canManageApiKeys={membership.role === "owner" || membership.role === "admin"}
-        currentProject={{
-          id: project.id,
-          name: project.name,
-          projectNumber: project.project_number,
-        }}
-      />
-
-      <section className="dashboard-workspace project-workspace">
-        <div className="project-layout">
-        <aside className="project-sidebar" aria-label="Project calculations">
-          <p className="project-sidebar-heading">New calculation</p>
-          <nav className="project-sidebar-tools">
-            {[
-              [WIND_ASSESSMENT_ID, "Wind assessment", "W"],
-              [FRAME_ANALYSIS_ID, "Frame analysis", "F"],
-              [AS3600_SECTION_ID, "Concrete section", "C"],
-              [AS4100_SECTION_ID, "Steel section · axial", "S"],
-            ].map(([id, title, glyph]) => (
-              <Link key={id} href={calculationWorkspaceHref(id, project.id)}
-                className={initialCalculationId === id && !reviseCalculationId ? "project-sidebar-link is-active" : "project-sidebar-link"}
-                aria-current={initialCalculationId === id && !reviseCalculationId ? "page" : undefined}>
-                <i aria-hidden="true">{glyph}</i>{title}<b aria-hidden="true">+</b>
-              </Link>
-            ))}
-            <Link href={`/dashboard/calculations?project=${encodeURIComponent(project.id)}`} className="project-sidebar-link is-muted">
-              <i aria-hidden="true">…</i>Browse library
-            </Link>
-          </nav>
+        projectTree={(
+          <div className="app-project-tree">
           <p className="project-sidebar-heading">In this project · {standaloneCalculations.length + (latestWorkflowId ? 1 : 0)}</p>
           <nav className="project-sidebar-tree">
             {latestWorkflowId ? (
@@ -533,7 +505,37 @@ export default async function ProjectPage({
             })}
             {!standaloneCalculations.length && !latestWorkflowId ? <p className="project-sidebar-empty">Saved calculations will appear here.</p> : null}
           </nav>
-        </aside>
+          <p className="project-sidebar-heading">New</p>
+          <nav className="project-sidebar-tools">
+            {[
+              [WIND_ASSESSMENT_ID, "Wind assessment", "W"],
+              [FRAME_ANALYSIS_ID, "Frame analysis", "F"],
+              [AS3600_SECTION_ID, "Concrete section", "C"],
+              [AS4100_SECTION_ID, "Steel section · axial", "S"],
+            ].map(([id, title, glyph]) => (
+              <Link key={id} href={calculationWorkspaceHref(id, project.id)}
+                className={initialCalculationId === id && !reviseCalculationId ? "project-sidebar-link is-active" : "project-sidebar-link"}
+                aria-current={initialCalculationId === id && !reviseCalculationId ? "page" : undefined}>
+                <i aria-hidden="true">{glyph}</i>{title}<b aria-hidden="true">+</b>
+              </Link>
+            ))}
+            <Link href={`/dashboard/calculations?project=${encodeURIComponent(project.id)}`} className="project-sidebar-link is-muted">
+              <i aria-hidden="true">…</i>Browse library
+            </Link>
+          </nav>
+          </div>
+        )}
+        area="projects"
+        canManageApiKeys={membership.role === "owner" || membership.role === "admin"}
+        currentProject={{
+          id: project.id,
+          name: project.name,
+          projectNumber: project.project_number,
+        }}
+      />
+
+      <section className="dashboard-workspace project-workspace">
+        <div className="project-layout">
         <div className="project-main">
         <div className="dashboard-title-row">
           <div>

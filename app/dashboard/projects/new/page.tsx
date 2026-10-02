@@ -34,7 +34,7 @@ export default async function NewProjectPage() {
   }
 
   return (
-    <main className="dashboard-shell">
+    <main className="dashboard-shell app-shell">
       <WorkspaceHeader
         area="projects"
         canManageApiKeys={memberships.some((membership) => membership.role === "owner" || membership.role === "admin")}

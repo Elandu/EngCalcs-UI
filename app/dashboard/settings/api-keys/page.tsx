@@ -46,7 +46,7 @@ export default async function ApiKeysPage() {
   }
 
   return (
-    <main className="dashboard-shell">
+    <main className="dashboard-shell app-shell">
       <WorkspaceHeader area="developer" canManageApiKeys />
 
       <section className="dashboard-workspace narrow-settings">

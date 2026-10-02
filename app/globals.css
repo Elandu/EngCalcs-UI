@@ -322,3 +322,83 @@
 .project-sidebar-item{grid-template-columns:20px minmax(0,1fr);column-gap:8px}.project-sidebar-item>small{grid-column:2}.status-icon{grid-row:1/span 2;align-self:center;display:grid;place-items:center;width:20px;height:20px;border-radius:5px;font-size:12px;font-style:normal;font-weight:900}.status-icon.is-pass{background:#e3f5e8;color:#1d7a3d}.status-icon.is-fail{background:#fde5e0;color:#c23a24}.status-icon.is-stale{background:#fff3d6;color:#9a6a00}.status-icon.is-info{background:#eef1ee;color:#6b7d76}.status-icon.is-none{background:transparent;color:#a3b1aa;border:1px dashed #c9d3cc}
 .calculation-workbench.is-sheet{grid-template-columns:minmax(0,1fr)}.calculation-output-pane.is-embedded{position:static;padding:14px}.calculator-launcher.is-sheet{max-width:none}.project-focused-calculation .calculator-launcher.is-sheet{padding-left:16px;padding-right:16px}
 .calculation-output-pane.is-embedded .calculation-output-empty-state{display:none}
+
+/* =====================================================================
+   App shell — matches the product preview on the home page:
+   dark green sidebar with project tree, light main area, quiet cards.
+   ===================================================================== */
+.app-shell{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh;padding:0;background:#fbfcfa}
+.app-sidebar{position:sticky;top:0;display:flex;flex-direction:column;gap:2px;height:100vh;overflow-y:auto;background:#112a23;color:#d5e3dd;padding:20px 14px;scrollbar-color:#29453c transparent;scrollbar-width:thin}
+.app-sidebar-brand{display:flex;align-items:center;gap:10px;margin:0 4px 24px;color:#fff;font-size:15px;font-weight:800;letter-spacing:-.02em}
+.app-sidebar-logo{display:grid;place-items:center;width:32px;height:32px;border-radius:8px;background:var(--lime);color:var(--ink);font-size:12px;font-weight:900}
+.app-sidebar-nav{display:grid;gap:2px}
+.app-nav-item{display:flex;align-items:center;gap:11px;border-radius:8px;padding:10px 11px;color:#9fb1aa;font-size:14px;font-weight:600;transition:background .12s,color .12s}
+.app-nav-item i{width:9px;height:9px;flex:none;border:1.5px solid #739086;border-radius:2px}
+.app-nav-item:hover{background:#17352d;color:#e7f0eb}
+.app-nav-item.is-active{background:#1c3a31;color:#fff}.app-nav-item.is-active i{border-color:var(--lime)}
+.app-sidebar-divider{height:1px;margin:16px 4px;background:#29453c}
+.app-sidebar-project{display:grid;gap:3px;border-radius:8px;padding:6px 8px 10px}
+.app-sidebar-project:hover{background:#17352d}
+.app-sidebar-project small{color:#7f968d;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.app-sidebar-project strong{color:#fff;font-size:14px;line-height:1.3}
+.app-sidebar-trailing{margin-top:auto;padding:8px}
+.app-project-tree{display:grid;gap:2px}
+.app-project-tree .project-sidebar-heading{margin:12px 8px 4px;color:#7f968d;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.app-project-tree .project-sidebar-tree,.app-project-tree .project-sidebar-tools{display:grid;gap:1px}
+.app-project-tree .project-sidebar-item{display:grid;grid-template-columns:14px minmax(0,1fr);column-gap:9px;border:0;border-radius:7px;background:none;padding:7px 8px}
+.app-project-tree .project-sidebar-item span{overflow:hidden;color:#c9d8d1;font-size:13px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+.app-project-tree .project-sidebar-item small{grid-column:2;color:#7f968d;font-size:11px}
+.app-project-tree .project-sidebar-item:hover{background:#17352d}
+.app-project-tree .project-sidebar-item.is-active{background:#1c3a31}.app-project-tree .project-sidebar-item.is-active span{color:var(--lime)}
+.app-project-tree .status-icon{width:14px;height:14px;border:0;border-radius:4px;font-size:9px}
+.app-project-tree .status-icon.is-pass{background:#1f4a33;color:#8ff0a8}
+.app-project-tree .status-icon.is-fail{background:#4f2520;color:#ffab9b}
+.app-project-tree .status-icon.is-stale{background:#4a3c17;color:#ffd27a}
+.app-project-tree .status-icon.is-info{background:none;color:transparent;position:relative}.app-project-tree .status-icon.is-info::after{content:"";position:absolute;inset:4px;border-radius:50%;background:#7b958c}
+.app-project-tree .project-sidebar-item.is-active .status-icon.is-info::after{background:var(--lime)}
+.app-project-tree .status-icon.is-none{background:none;border:1px dashed #4b6359;color:transparent}
+.app-project-tree .project-sidebar-empty{margin:2px 8px;color:#7f968d;font-size:12px}
+.app-project-tree .project-sidebar-link{display:flex;align-items:center;gap:9px;border-radius:7px;padding:7px 8px;color:#9fb1aa;font-size:13px;font-weight:600}
+.app-project-tree .project-sidebar-link i{display:grid;place-items:center;width:18px;height:18px;flex:none;border-radius:5px;background:#1c3a31;color:var(--lime);font-size:10px;font-style:normal;font-weight:900}
+.app-project-tree .project-sidebar-link b{margin-left:auto;color:#5f7a70;font-weight:600}
+.app-project-tree .project-sidebar-link:hover{background:#17352d;color:#e7f0eb}
+.app-project-tree .project-sidebar-link.is-active{background:#1c3a31;color:#fff}
+.app-project-tree .project-sidebar-link.is-muted i{background:none;color:#7f968d}
+
+.app-shell>.dashboard-workspace{width:100%;max-width:none;margin:0;padding:28px 40px 64px}
+.app-shell .project-layout{display:block}
+.app-shell .dashboard-title-row{align-items:center;margin-bottom:22px;border-bottom:1px solid #e4e8e5;padding-bottom:18px}
+.app-shell .dashboard-title-row .eyebrow{margin:0;color:#718078;font-size:11px;letter-spacing:.08em}
+.app-shell .dashboard-title-row h1{margin:4px 0;font-size:28px;letter-spacing:-.03em;line-height:1.15}
+.app-shell .dashboard-title-row p:last-child{font-size:14px}
+.app-shell .button-primary{border-radius:8px;background:var(--ink);padding:10px 16px;font-size:14px}
+.app-shell .project-meta-strip{border-color:#e2e7e3;background:#fff;font-size:12px}
+
+/* Calculation sheets: no outer card, preview-style topline and cards */
+.app-shell .calculator-launcher.is-sheet,.project-focused-calculation .calculator-launcher.is-sheet{border:0;background:transparent;box-shadow:none;padding:0}
+.calculator-launcher.is-sheet .sheet-bar{top:0;margin:0 0 18px;border:0;border-bottom:1px solid #e4e8e5;border-radius:0;background:rgba(251,252,250,.95);box-shadow:none;padding:12px 0 16px}
+.sheet-bar-title small{color:#718078;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.sheet-bar-title-input{width:100%;min-width:0;margin:2px 0 4px -6px;border:1px solid transparent;border-radius:7px;background:transparent;padding:2px 6px;color:var(--ink);font-size:26px;font-weight:800;letter-spacing:-.03em}
+.sheet-bar-title-input:hover{border-color:#e2e7e3}.sheet-bar-title-input:focus{border-color:#9fb0a7;background:#fff;outline:none}
+.calculator-launcher.is-sheet .launcher-heading.is-compact p{color:#718078;font-size:13px}
+.calculator-launcher.is-sheet .definition-note{display:flex;align-items:center;gap:8px;border:1px solid #dce5df;border-radius:8px;background:transparent;padding:9px 12px}
+.calculator-launcher.is-sheet .definition-note::before{content:"";width:7px;height:7px;flex:none;border-radius:50%;background:#e0a43a}
+.calculator-launcher.is-sheet .definition-note p{margin:0;color:#5f716a;font-size:12px}
+.calculation-output-pane.is-embedded{border:0;background:transparent;box-shadow:none;padding:0}
+.calculation-output-pane.is-embedded .live-preview-panel{margin:0;border:0;padding:0}
+.calculation-output-pane.is-embedded .live-preview-panel>.calculation-output-heading{display:none}
+.calculation-output-pane.is-embedded .live-preview-status{display:none}
+.calculation-output-pane.is-embedded .live-preview-status.is-error,.calculation-output-pane.is-embedded .live-preview-status.is-invalid{display:block}
+.calculation-output-pane.is-embedded>.calculation-output-heading{margin-top:8px;border-top:1px solid #e4e8e5;padding-top:14px}
+
+@media(max-width:900px){
+  .app-shell{grid-template-columns:1fr}
+  .app-sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px;padding:12px}
+  .app-sidebar-brand{margin:0 8px 0 0}
+  .app-sidebar-nav{display:flex;overflow-x:auto}
+  .app-sidebar-divider,.app-project-tree{display:none}
+  .app-sidebar-project{padding:4px 8px}
+  .app-shell>.dashboard-workspace{padding:20px 16px 48px}
+}
+@media print{.app-sidebar{display:none!important}.app-shell{display:block;background:#fff}}
+.calculator-launcher.is-sheet .form-actions,.calculation-output-pane.is-embedded .live-preview-save,.calculation-output-pane.is-embedded .live-preview-panel>.calculation-output-note,.calculation-output-pane.is-embedded.has-no-saved-run>:not(.live-preview-panel){display:none}
