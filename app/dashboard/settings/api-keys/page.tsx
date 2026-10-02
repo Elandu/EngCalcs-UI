@@ -56,7 +56,7 @@ export default async function ApiKeysPage() {
             <h1>API & MCP keys</h1>
             <p>
               Organisation-scoped credentials for integrations, automation and engineering
-              agents.
+              tools.
             </p>
           </div>
         </div>
