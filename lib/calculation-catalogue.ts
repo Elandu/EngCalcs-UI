@@ -2,6 +2,15 @@ export const WIND_ASSESSMENT_ID = "au.wind.site_assessment";
 export const FRAME_ANALYSIS_ID = "structural.pynite.frame_analysis";
 export const HOUSING_ASSESSMENT_ID = "au.wind.as4055.housing_assessment";
 export const WIND_FRAME_LOADS_ID = "au.wind.frame_loads";
+export const AS3600_SECTION_ID = "structural.as3600.section_analysis";
+export const AS4100_SECTION_ID = "structural.as4100.section_analysis";
+
+/** Calculations whose unsaved engine results may be previewed while inputs are edited. */
+export const PREVIEWABLE_CALCULATION_IDS: ReadonlySet<string> = new Set([
+  FRAME_ANALYSIS_ID,
+  AS3600_SECTION_ID,
+  AS4100_SECTION_ID,
+]);
 
 const windComponentIds = new Set([
   "au.wind.climate_change_multiplier",

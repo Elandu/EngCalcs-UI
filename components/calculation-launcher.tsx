@@ -3,7 +3,18 @@
 import { FormEvent, useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { calculationDisplayName, calculationWorkspaceHref, FRAME_ANALYSIS_ID, WIND_ASSESSMENT_ID } from "@/lib/calculation-catalogue";
+import { AS3600_SECTION_ID, AS4100_SECTION_ID, calculationDisplayName, calculationWorkspaceHref, FRAME_ANALYSIS_ID, WIND_ASSESSMENT_ID } from "@/lib/calculation-catalogue";
+import { useLivePreview } from "@/lib/use-live-preview";
+import {
+  ConcreteSectionEditor,
+  ConcreteSectionResults,
+  parseConcreteSectionResult,
+  parseSteelAxialResult,
+  SteelAxialEditor,
+  SteelAxialResults,
+  type ConcreteSectionResult,
+  type SteelAxialResult,
+} from "@/components/structural-section-editors";
 import { runLinks } from "@/lib/calculation-revisions";
 import { resolveCalculationOutputSchema } from "@/lib/workflow-output-schema.mjs";
 
@@ -39,6 +50,19 @@ type CalculationDefinition = {
 };
 
 type SchemaRecord = Record<string, unknown>;
+
+type StructuralResult = { kind: "concrete"; value: ConcreteSectionResult } | { kind: "steel"; value: SteelAxialResult };
+
+function parseStructuralResult(value: unknown): StructuralResult | null {
+  const concrete = parseConcreteSectionResult(value);
+  if (concrete) return { kind: "concrete", value: concrete };
+  const steel = parseSteelAxialResult(value);
+  return steel ? { kind: "steel", value: steel } : null;
+}
+
+function isSectionCalculation(id?: string) {
+  return id === AS3600_SECTION_ID || id === AS4100_SECTION_ID;
+}
 
 type LinkSourceRun = {
   calculationId: string;
@@ -625,6 +649,7 @@ export function CalculationLauncher({
   const [linkedInputs, setLinkedInputs] = useState<LinkedInputDraft[]>([]);
   const [submittedRun, setSubmittedRun] = useState<SavedRunSummary | null>(null);
   const [revisionTarget, setRevisionTarget] = useState<{ calculationId: string; expectedRunId: string } | null>(null);
+  const [livePreviewEnabled, setLivePreviewEnabled] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -709,6 +734,23 @@ export function CalculationLauncher({
     }) : [];
     return { ...latest, linkedInputs: savedLinks };
   }, [selected, sourceRuns, submittedRun, revisionTarget]);
+  const sectionInputs = useMemo((): { inputs: SchemaRecord | null; error: string } => {
+    if (!selected?.input_schema || !isSectionCalculation(selected.id)) return { inputs: null, error: "" };
+    try {
+      return { inputs: serializeInputs(selected.input_schema, values), error: "" };
+    } catch (error) {
+      return { inputs: null, error: error instanceof Error ? error.message : "Check the calculation inputs." };
+    }
+  }, [selected, values]);
+  const preview = useLivePreview(selected?.id ?? "", sectionInputs.inputs, {
+    enabled: livePreviewEnabled && Boolean(sectionInputs.inputs),
+    parse: parseStructuralResult,
+  });
+  const savedStructuralResult = useMemo(
+    () => savedRun && isSectionCalculation(selected?.id) ? parseStructuralResult(savedRun.result) : null,
+    [savedRun, selected],
+  );
+  const shownStructuralResult = preview.result ?? savedStructuralResult;
   const savedOutputs = useMemo(
     () => savedRun && selected ? flattenOutputs(savedRun.result, selected.output_schema, selected.id) : [],
     [savedRun, selected],
@@ -933,7 +975,17 @@ export function CalculationLauncher({
                 <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required />
               </label>
 
-              <div className="schema-input-grid">
+              {selected?.id === AS3600_SECTION_ID ? (
+                <ConcreteSectionEditor
+                  values={values}
+                  onChange={setValues}
+                  result={shownStructuralResult?.kind === "concrete" ? shownStructuralResult.value : null}
+                  resultCurrent={preview.current}
+                  disabled={busy || linkedInputs.length > 0}
+                />
+              ) : selected?.id === AS4100_SECTION_ID ? (
+                <SteelAxialEditor values={values} onChange={setValues} disabled={busy || linkedInputs.length > 0} />
+              ) : <div className="schema-input-grid">
                 {Object.entries(selected?.input_schema?.properties ?? {}).map(([key, schema]) => (
                   <SchemaField
                     key={key}
@@ -946,7 +998,8 @@ export function CalculationLauncher({
                     onChange={(value) => setValues((current) => ({ ...current, [key]: value }))}
                   />
                 ))}
-              </div>
+              </div>}
+              {isSectionCalculation(selected?.id) && linkedInputs.length ? <p className="form-message">Linked inputs are locked. Remove the links to edit the section visually.</p> : null}
 
               <section className="calculation-link-builder" aria-labelledby="calculation-link-title">
                 {revisionTarget && linkedInputs.length ? <button type="button" className="button button-secondary" disabled={busy} onClick={refreshLinkedSources}>Use latest source runs</button> : null}
@@ -1032,6 +1085,33 @@ export function CalculationLauncher({
             </div>
 
             <aside className="calculation-output-pane" aria-labelledby={outputHeadingId} aria-live="polite">
+              {isSectionCalculation(selected?.id) ? (
+                <div className="live-preview-panel">
+                  <div className="calculation-output-heading">
+                    <div>
+                      <p className="eyebrow">Engine result</p>
+                      <h3>Live preview</h3>
+                    </div>
+                    <label className="live-preview-toggle">
+                      <input type="checkbox" checked={livePreviewEnabled} onChange={(event) => setLivePreviewEnabled(event.target.checked)} />
+                      <span>Auto-update</span>
+                    </label>
+                  </div>
+                  <p className={`live-preview-status is-${!livePreviewEnabled ? "off" : sectionInputs.error ? "invalid" : preview.status === "error" ? "error" : preview.current ? "current" : "pending"}`} role="status">
+                    {!livePreviewEnabled ? "Auto-update is off. Run & save to calculate."
+                      : sectionInputs.error ? `Waiting for valid inputs · ${sectionInputs.error}`
+                      : preview.status === "error" ? preview.error
+                      : preview.current ? "Current inputs · not saved"
+                      : "Updating…"}
+                  </p>
+                  {preview.result ? (
+                    <div className={preview.current ? undefined : "live-preview-stale"}>
+                      {preview.result.kind === "concrete" ? <ConcreteSectionResults result={preview.result.value} /> : <SteelAxialResults result={preview.result.value} />}
+                    </div>
+                  ) : null}
+                  <p className="calculation-output-note">Previews run the same engine without saving. Use Run &amp; save to create the project record.</p>
+                </div>
+              ) : null}
               <div className="calculation-output-heading">
                 <div>
                   <p className="eyebrow">Saved output</p>
@@ -1051,7 +1131,9 @@ export function CalculationLauncher({
                     </time>
                   </div>
                   <code className="calculation-output-run-id" title={savedRun.runId}>Run ID · {savedRun.runId || "Available in run history"}</code>
-                  {savedOutputs.length ? (
+                  {savedStructuralResult && !preview.result ? (
+                    savedStructuralResult.kind === "concrete" ? <ConcreteSectionResults result={savedStructuralResult.value} /> : <SteelAxialResults result={savedStructuralResult.value} />
+                  ) : savedOutputs.length ? (
                     <dl className="calculation-output-values">
                       {savedOutputs.slice(0, 8).map((output) => (
                         <div key={output.path}>

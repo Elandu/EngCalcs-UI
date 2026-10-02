@@ -17,3 +17,40 @@
 @media(max-width:560px){.diagramGrid{grid-template-columns:1fr}.resultsControls>span{margin-left:0}}
 
 .resultSamplingNote{margin:0 0 10px;color:#a9beb3;font-size:10px;line-height:1.5}
+
+/* Interactive canvas: views, editing tools and result overlays */
+.canvasTools{flex-wrap:wrap;gap:8px;padding:9px 12px 4px}
+.segmented{display:inline-flex;border:1px solid #2f5248;border-radius:8px;background:#122f29;padding:2px;gap:2px}
+.segmented .segment,.segmented .segmentActive{border:0;border-radius:6px;background:transparent;padding:5px 9px;color:#9fb6aa;font-size:9px;font-weight:800;cursor:pointer}
+.segmented .segmentActive{background:#c8ff65;color:#163328}
+.segmented .segment:hover{background:#1d443a;color:#e1eee7}
+.segmented .segment:disabled{cursor:not-allowed;opacity:.4;background:transparent}
+.canvasInputs{display:inline-flex;gap:8px}
+.canvasInputs label{display:inline-flex;align-items:center;gap:5px;color:#9fb6aa;font-size:9px;font-weight:800}
+.canvasInputs select,.canvasInputs input{width:70px;min-height:26px;border:1px solid #345a4d;border-radius:6px;background:#102d27;padding:2px 6px;color:#e7f0eb;font-size:9px}
+.canvasTools .fitButton{margin-left:auto}
+.canvasCrosshair{cursor:crosshair}
+.canvasCrosshair:active{cursor:crosshair}
+.nodeHitArea{fill:transparent;cursor:pointer}
+.nodeDraggable .nodeHitArea{cursor:move}
+.memberUnderlay{opacity:.45}
+.overlayStale{opacity:.4;transition:opacity .2s ease}
+.deformed{fill:none;stroke:#c8ff65;stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round}
+.diagramFill{fill:#c8ff65;fill-opacity:.16;stroke:none}
+.diagramStroke{fill:none;stroke:#c8ff65;stroke-width:2;stroke-linejoin:round}
+.diagramLabel{fill:#e8ffc2;font-size:10px;font-weight:850;paint-order:stroke;stroke:#102d27;stroke-width:3px}
+.loadArrow{stroke:#f3b18f;fill:#f3b18f}
+.loadArrow text,.reactionArrow text{stroke:#102d27;stroke-width:3px;paint-order:stroke;font-size:9px;font-weight:750}
+.loadArrow text{fill:#f7c8ae}
+.reactionArrow{stroke:#78c2ff;fill:#78c2ff}
+.reactionArrow text{fill:#bfe3ff}
+.rubberBand{stroke:#c8ff65;stroke-width:2;stroke-dasharray:6 5}
+.liveToggle{display:flex;align-items:center;gap:6px;color:#afc2b7;font-size:9px;font-weight:800}
+.liveToggle input{accent-color:#c8ff65}
+.overlayControls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.overlayControls select{min-height:28px;border:1px solid #345a4d;border-radius:6px;background:#102d27;padding:2px 6px;color:#e7f0eb;font-size:9px;font-weight:750}
+.livePill,.livePillStale,.livePillError{border-radius:999px;padding:4px 8px;font-size:8px;font-weight:900;letter-spacing:.05em;white-space:nowrap}
+.livePill{border:1px solid #537c46;background:#274833;color:#c8ff65}
+.livePillStale{border:1px solid #5f6b49;background:#2f3b2a;color:#e3e9b5}
+.livePillError{border:1px solid #815244;background:#49332f;color:#ffd1bd}
+.statusDotIdle{width:6px;height:6px;border-radius:50%;background:#6c857a}
