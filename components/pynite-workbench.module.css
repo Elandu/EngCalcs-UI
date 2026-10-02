@@ -100,3 +100,79 @@
 @media(max-width:850px){.ribbonGroup{padding:2px 8px}}
 .heatLegend{display:inline-flex;align-items:center;gap:6px}
 .heatLegend i{display:inline-block;width:70px;height:8px;border-radius:999px;background:linear-gradient(90deg,#6fbf5a,#f3c14b,#e8664a)}
+
+/* =====================================================================
+   Light modeller theme (AutoCalcs-style): white panels, quiet chrome,
+   a light canvas with dark linework and colour reserved for results.
+   ===================================================================== */
+.workspace{color:#1d2b27}
+.ribbonBar{border-color:#e2e6e3;background:#fff;box-shadow:0 1px 2px rgba(17,37,31,.05)}
+.ribbonTitle span{color:#7a8a83}.ribbonTitle input{color:#10231e}.ribbonTitle input:hover{border-color:#e2e6e3}.ribbonTitle input:focus{border-color:#9fb0a7;background:#f6f8f7}
+.ribbonGroup{border-left-color:#eceeec}.ribbonGroup>span{color:#9aa7a1}
+.ribbonButtons>button,.ribbonButtons>select{border-color:#d9dfdb;background:#fff;color:#24332e}
+.ribbonButtons>button:hover{border-color:#b9c4be;background:#f3f6f4}
+.ribbonButtons>.runButton{border-color:#10231e;background:#10231e;color:#fff}.ribbonButtons>.runButton:hover{background:#21443a}
+.liveSwitch{color:#24332e}.liveSwitch span{background:#d5dcd8}.liveSwitch span::after{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)}.liveSwitch input:checked+span{background:#2f9d55}.liveSwitch input:checked+span::after{background:#fff}
+.segmented{border-color:#e2e6e3;background:#f3f5f4}.segmented .segment{color:#5c6b65}.segmented .segmentActive{background:#10231e;color:#fff}.segmented .segment:hover{background:#e7ebe8;color:#10231e}
+.toolsPanel,.inspectorPanel{border-color:#e2e6e3;background:#fff}
+.viewportPanel{border-color:#e2e6e3;background:#fff}
+.panelHeading h2{color:#10231e}.eyebrow{color:#8a9893}
+.countPill,.unitsBadge{border-color:#e2e6e3;background:#f3f5f4;color:#4c5b55}
+.tabs{border-bottom-color:#eceeec}.tab{color:#6b7a74}.tabActive{background:#f0f5f1;color:#10231e;box-shadow:inset 0 -2px #2f9d55}
+.panelScroll{scrollbar-color:#cfd7d2 transparent}
+.toolSection,.inspectorSection{border-color:#e6eae7;background:#fff}
+.sectionTitle h3,.inspectorSection h3{color:#10231e}.sectionTitle>span,.inspectorSection>p{color:#7a8a83}
+.textButton{color:#2f7d4f}
+.nodeRow{background:#f7f9f8}.nodeRow strong{color:#24332e}.nodeRow span{color:#7a8a83}.nodeRow i,.rowSelected i{color:#2f7d4f}
+.rowSelected{border-color:#9cc7a8;background:#eaf3ec}.rowSelected strong{color:#1d5e36}
+.coordinateGrid label,.propertyGrid label,.twoColumnFields label,.field{color:#6b7a74}
+.coordinateGrid input,.propertyGrid input,.twoColumnFields input,.field input,.field select,.twoColumnFields select,.comboName input,.factorRow input{border-color:#d9dfdb;background:#fff;color:#10231e;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.coordinateGrid input:focus,.propertyGrid input:focus,.twoColumnFields input:focus,.field input:focus,.field select:focus,.twoColumnFields select:focus,.factorRow input:focus{border-color:#2f7fd3}
+.dofGrid label{border-color:#e2e6e3;background:#f7f9f8;color:#4c5b55}.dofGrid input,.toggle input{accent-color:#2f9d55}
+.secondaryButton,.sampleButton{border-color:#d9dfdb;background:#fff;color:#24332e}.secondaryButton:hover,.sampleButton:hover{border-color:#b9c4be;background:#f3f6f4}.sampleButton{color:#5c6b65}
+.dangerButton{border-color:#f0c4b8;background:#fff4f1;color:#b3321f}.dangerButton:hover{border-color:#e39a86;background:#ffe9e3}
+.viewportHeader{border-bottom-color:#eceeec}.viewportHeader strong{color:#10231e}
+.toggle{color:#4c5b55}
+.canvasFrame{background:#fafbfa}
+.canvasTools button{border-color:#d9dfdb;background:#fff;color:#4c5b55}
+.canvasInputs label{color:#6b7a74}.canvasInputs select,.canvasInputs input{border-color:#d9dfdb;background:#fff;color:#10231e}
+.canvasHint{color:#8a9893}
+.member{stroke:#3d4a45;stroke-width:3.5}.memberSelected{stroke:#2f7fd3;filter:none}
+.node{fill:#fff;stroke:#24332e;stroke-width:2}.nodeSelected{fill:#2f7fd3;stroke:#fff}
+.canvas .nodeLabel{fill:#24332e}.canvas .memberLabel{fill:#7a8a83}
+.supportMarker{fill:#9cc3ea;stroke:#2f6fb0}
+.loadArrow{stroke:#d9822b;fill:#d9822b}.loadArrow text{fill:#a55a12;stroke:#fff}
+.reactionArrow{stroke:#2f7fd3;fill:#2f7fd3}.reactionArrow text{fill:#1f5f9b;stroke:#fff}
+.deformed{stroke:#2f7fd3}
+.diagramFill{fill:#2f9d55;fill-opacity:.13}.diagramStroke{stroke:#2f7d4f}
+.diagramLabel{fill:#1d5e36;stroke:#fff}
+.resultStamp{fill:#2f7d4f}.axisMark text{fill:#4c5b55}.canvasEmpty{fill:#8a9893}
+.rubberBand{stroke:#2f7fd3}
+.memberUnderlay{opacity:.35}
+.canvasFooter,.bottomStatus{border-top-color:#eceeec;color:#6b7a74}
+.statusDotIdle{background:#b9c4be}.statusDot{background:#2f9d55;box-shadow:0 0 6px #2f9d5588}
+.inspectorTag{color:#2f7d4f}
+.propertyList div{border-top-color:#eef1ef}.propertyList dt{color:#7a8a83}.propertyList dd{color:#10231e}
+.inspectorLoad,.loadRecord{border-color:#e2e6e3;background:#f7f9f8}.inspectorLoad strong,.loadRecord strong{color:#24332e}.inspectorLoad span,.loadRecord span{color:#6b7a74}.inspectorLoad button,.loadRecord button{color:#8a9893}
+.emptyText,.muted,.helpText{color:#6b7a74}
+.inspectorFooter{border-top-color:#eceeec}.inspectorFooter span{color:#a06a10}.inspectorFooter p{color:#7a8a83}
+.loadCase,.loadCaseSelected{border-color:#e2e6e3;background:#fff}.loadCaseSelected{border-color:#9cc7a8;background:#eaf3ec}.loadCase strong,.loadCaseSelected strong{color:#2f7d4f}.loadCase span,.loadCaseSelected span{color:#4c5b55}
+.comboCard{border-color:#e2e6e3;background:#f7f9f8}.comboName,.factorRow{color:#6b7a74}
+.runButtonWide{border-color:#10231e;background:#10231e;color:#fff}
+.resultMetricGrid>div{border-color:#e2e6e3;background:#f7f9f8}.resultMetricGrid span{color:#6b7a74}.resultMetricGrid strong{color:#10231e}.resultMetricGrid small{color:#2f7d4f}
+.resultTableHead{color:#7a8a83}.resultTableRow{border-top-color:#eef1ef;color:#24332e}.resultTableRow:hover{background:#f3f6f4}.resultTableRow strong{color:#10231e}
+.solvedPill{border-color:#b7dcc2;background:#e7f5eb;color:#1d5e36!important}
+.livePill{border-color:#b7dcc2;background:#e7f5eb;color:#1d5e36}.livePillStale{border-color:#ead9a6;background:#fff8e6;color:#8a6200}.livePillError{border-color:#f0c4b8;background:#fff4f1;color:#b3321f}
+.warningBox{border-color:#f0d9a8;background:#fff8ec}.warningBox strong{color:#8a6200}.warningBox p{color:#6b5a2e}
+.limitationsBox{border-color:#e2e6e3;background:#f7f9f8}.limitationsBox strong{color:#2f7d4f}.limitationsBox p{color:#6b7a74}
+.emptyPanel{border-color:#d9dfdb;color:#24332e}.emptyPanel p{color:#6b7a74}.emptyIcon{border-color:#b7dcc2;color:#2f7d4f}
+.messageBar{color:#6b7a74}
+.tipBar{border-color:#c6dcf5;background:#eef6ff;color:#24332e}.tipBar strong{color:#1f5f9b}.tipBar b{color:#10231e}.tipBar kbd{border-color:#c9d3cc;background:#fff}.tipBar button{border-color:#10231e;background:#10231e;color:#fff}
+.resultsCanvas{background:#fafbfa}.resultsControls{border-color:#e2e6e3;background:#fff}.resultsControls label{color:#6b7a74}.resultsControls select{border-color:#d9dfdb;background:#fff;color:#10231e}.resultsControls>span{color:#2f7d4f}
+.diagramCard{border-color:#e2e6e3;background:#fff}.diagram text{fill:#6b7a74}.diagramCard .diagram text:first-child{fill:#10231e}.diagramBaseline{stroke:#cfd7d2}.diagramLine{stroke:#2f7d4f}.emptyPlot{border-color:#d9dfdb;color:#7a8a83}.resultSamplingNote,.resultContext{color:#6b7a74}
+.modelViewButton,.overlayControls select{border-color:#d9dfdb;background:#fff;color:#24332e}
+/* Canvas overlays */
+.canvasStage{position:relative;min-height:0}
+.canvasChips{position:absolute;top:10px;left:12px;z-index:1;display:flex;gap:6px;pointer-events:none}
+.canvasChips span{border:1px solid #e2e6e3;border-radius:6px;background:rgba(255,255,255,.92);padding:4px 9px;color:#24332e;font-size:12px;font-weight:600}
+.commandHint{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#4c5b55}

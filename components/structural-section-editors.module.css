@@ -202,3 +202,78 @@
 .checkDetails[open] > summary { margin-bottom: 8px; }
 @media print { .checkDetails > * { display: grid; } .checkDetails > summary { display: none; } }
 @media print { .ghostButton, .textButton, .secondaryButton, .layerTools, .chips, .barRow button, .barRowSelected button { display: none !important; } .row input { background: transparent; } }
+
+/* ---- calcs.com-style sheet: check chips, summary rows, bordered inputs, section cards ---- */
+.chipStrip { display: flex; flex-wrap: wrap; gap: 8px; }
+.chipBox { display: grid; justify-items: center; gap: 3px; min-width: 74px; }
+.chipBox > span { color: var(--se-muted, #5b6d66); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.chipBox > b { min-width: 64px; border: 2px solid; border-radius: 6px; padding: 2px 8px; font-size: 13px; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chipPass { border-color: #3aa35b !important; background: #effaf2; color: #1d7a3d; }
+.chipFail { border-color: #d6452f !important; background: #fff1ee; color: #b3321f; }
+.chipInfo { border-color: #c9d3cc !important; background: #f7f9f6; color: #31443f; }
+.utilChipPass, .utilChipFail { display: inline-block; min-width: 52px; border: 2px solid; border-radius: 6px; padding: 1px 6px; font-size: 12px; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.utilChipPass { border-color: #3aa35b; color: #1d7a3d; background: #effaf2; }
+.utilChipFail { border-color: #d6452f; color: #b3321f; background: #fff1ee; }
+
+.summaryCard { border: 1px solid #dfe5e0; border-radius: 10px; background: #fff; padding: 12px 14px 8px; }
+.summaryCard > h4 { margin: 0 0 6px; color: #1f6f8b; font-size: 13px; font-weight: 700; }
+.summaryLine { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(86px, auto) 60px; align-items: center; gap: 10px; min-height: 36px; border-top: 1px solid #eef1ec; font-size: 13px; }
+.summaryLine:first-of-type { border-top: 0; }
+.summaryLine > span:first-child { color: var(--se-ink, #10231e); }
+.summaryLine > i { color: #10231e; font-family: "Times New Roman", Georgia, serif; font-size: 15px; white-space: nowrap; }
+.summaryLine > b { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.summaryLine > b small { color: var(--se-muted, #5b6d66); font-weight: 600; }
+.summaryLine > span:last-child { text-align: right; }
+
+.group { border: 1px solid #dfe5e0; border-radius: 10px; background: #fff; padding: 10px 14px 6px; }
+.group legend { padding: 0 6px; color: #1f6f8b; font-size: 13px; }
+.group legend i { background: #1f6f8b; color: #fff; }
+.rowSymbol::after { content: " ="; color: var(--se-muted); font-style: normal; }
+.row input { border: 1px solid #c9d3cc; background: #fff; text-align: left; font-weight: 500; }
+.row input:hover { border-color: #9fb0a7; }
+.row input:focus { border-color: #2f7fd3; outline: 2px solid #2f7fd322; }
+.rowInvalid input { border-color: #d6452f; background: #fff1ee; }
+.rowSymbol { color: var(--se-ink); }
+
+@media (max-width: 760px) {
+  .summaryLine { grid-template-columns: minmax(0, 1fr) auto 56px; }
+  .summaryLine > i { display: none; }
+}
+
+/* ---- AutoCalcs-style app layout: input column | preview + response column ---- */
+.appLayout { display: grid; grid-template-columns: minmax(330px, 400px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.inputColumn { display: grid; gap: 12px; min-width: 0; }
+.outputColumn { position: sticky; top: 76px; display: grid; gap: 12px; min-width: 0; }
+.columnHead { display: flex; align-items: center; justify-content: space-between; color: var(--se-muted); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.columnHead .ghostButton { min-height: 30px; padding: 4px 10px; font-size: 12px; letter-spacing: 0; text-transform: none; }
+.group legend i { width: auto; min-width: 22px; padding: 0 4px; border-radius: 4px; background: transparent; color: #8a9a93; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.group legend { color: var(--se-ink); }
+.group legend sub { font-size: 9px; }
+.panel { border: 1px solid #dfe5e0; border-radius: 10px; background: #fff; overflow: hidden; }
+.panelHead { display: flex; align-items: baseline; gap: 10px; border-bottom: 1px solid #eef1ec; padding: 9px 14px; }
+.panelHead small { color: #8a9a93; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.panelHead strong { font-size: 13px; }
+.panel .canvasCard { border: 0; border-radius: 0; }
+.panel .sectionCanvas { max-height: 380px; }
+.shapeCards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.shapeCard, .shapeCardActive { display: grid; gap: 1px; border: 1px solid #dfe5e0; border-radius: 8px; background: #fff; padding: 7px 9px; color: var(--se-ink); text-align: left; cursor: pointer; }
+.shapeCard small, .shapeCardActive small { color: #8a9a93; font-size: 10px; }
+.shapeCard:disabled { cursor: not-allowed; opacity: 0.5; }
+.shapeCardActive { border-color: #10231e; background: #10231e; color: #fff; }
+.shapeCardActive small { color: #b8c9c1; }
+.modeSwitch { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 2px; justify-self: start; border: 1px solid #dfe5e0; border-radius: 8px; background: #f3f6f1; padding: 2px; }
+.modeTab, .modeActive { border: 0; border-radius: 6px; background: transparent; padding: 5px 14px; color: var(--se-muted); font-size: 12px; font-weight: 700; cursor: pointer; }
+.modeActive { background: #fff; color: var(--se-ink); box-shadow: 0 1px 3px rgba(17, 37, 31, 0.12); }
+.barsPair { display: flex; align-items: center; gap: 6px; }
+.barsPair input, .row select { min-width: 0; min-height: 34px; border: 1px solid #c9d3cc; border-radius: 7px; background: #fff; padding: 5px 8px; color: var(--se-ink); font-size: 14px; }
+.barsPair input { width: 58px; }
+.barsPair select { flex: 1; min-width: 0; min-height: 34px; border: 1px solid #c9d3cc; border-radius: 7px; background: #fff; padding: 5px 6px; font-size: 14px; }
+.barsPair span { color: var(--se-muted); font-size: 12px; white-space: nowrap; }
+.subhead { margin: 4px 0 0; color: var(--se-muted); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.row input, .row select, .barsPair input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.inputColumn .row { grid-template-columns: minmax(0, 1fr) 44px minmax(110px, 140px) 34px; }
+
+@media (max-width: 1080px) {
+  .appLayout { grid-template-columns: 1fr; }
+  .outputColumn { position: static; }
+}

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --test lib/safe-auth-redirect.test.mjs lib/calculation-run-dispatch.test.mjs lib/calculation-catalogue.test.mjs supabase/functions/opencalcs-run-calculation-v2/linked-validation.test.mjs lib/calculation-revisions.test.mjs lib/frame-wind-links.test.mjs supabase/functions/_shared/wind-workflow-rpc.test.mjs lib/workflow-output-schema.test.mjs lib/frame-geometry.test.mjs lib/concrete-section.test.mjs lib/calculation-preview.test.mjs lib/rate-limit.test.mjs supabase/functions/opencalcs-run-calculation/handler.test.mjs",
+    "test": "node --test lib/safe-auth-redirect.test.mjs lib/calculation-run-dispatch.test.mjs lib/calculation-catalogue.test.mjs supabase/functions/opencalcs-run-calculation-v2/linked-validation.test.mjs lib/calculation-revisions.test.mjs lib/frame-wind-links.test.mjs supabase/functions/_shared/wind-workflow-rpc.test.mjs lib/workflow-output-schema.test.mjs lib/frame-geometry.test.mjs lib/concrete-section.test.mjs lib/calculation-preview.test.mjs lib/rate-limit.test.mjs lib/calculation-status.test.mjs supabase/functions/opencalcs-run-calculation/handler.test.mjs",
     "test:linked-validation": "node --test supabase/functions/opencalcs-run-calculation-v2/linked-validation.test.mjs",
     "test:revisions-db": "node --test supabase/tests/calculation-revisions.test.mjs supabase/tests/wind-workflow-transactions.test.mjs"
   },

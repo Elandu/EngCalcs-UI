@@ -361,6 +361,12 @@ export function FrameCanvas({
         ) : null}
         <button type="button" className={styles.fitButton} onClick={() => { setPan({ x: 0, y: 0 }); setZoom(1); }}>Fit</button>
       </div>
+      <div className={styles.canvasStage}>
+      <div className={styles.canvasChips} aria-hidden="true">
+        <span>Mode: {activeTool === "node" ? "Add node" : activeTool === "member" ? "Draw member" : "Select"}</span>
+        <span>View: {VIEW_PRESETS[view].label}</span>
+        {canEdit ? <span>Grid: {gridStep} m</span> : null}
+      </div>
       <svg
         ref={svgRef}
         className={`${styles.canvas} ${activeTool !== "select" ? styles.canvasCrosshair : ""}`}
@@ -376,13 +382,13 @@ export function FrameCanvas({
       >
         <defs>
           <pattern id="fea-grid" width="28" height="28" patternUnits="userSpaceOnUse">
-            <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#1b332f" strokeWidth="1" />
+            <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#e7ebe8" strokeWidth="1" />
           </pattern>
           <marker id="arrow-load" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0 0 L10 5 L0 10 z" fill="#f3b18f" />
+            <path d="M0 0 L10 5 L0 10 z" fill="#d9822b" />
           </marker>
           <marker id="arrow-reaction" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0 0 L10 5 L0 10 z" fill="#78c2ff" />
+            <path d="M0 0 L10 5 L0 10 z" fill="#2f7fd3" />
           </marker>
         </defs>
         <rect width={WIDTH} height={HEIGHT} fill="url(#fea-grid)" />
@@ -524,7 +530,7 @@ export function FrameCanvas({
         <g className={styles.axisMark} pointerEvents="none">
           {triad.map(({ axis, x, y, visible }) => visible ? (
             <g key={axis}>
-              <line x1={70} y1={520} x2={x} y2={y} stroke={axis === "X" ? "#93bb9f" : axis === "Y" ? "#e8b971" : "#79a7d9"} strokeWidth={2} />
+              <line x1={70} y1={520} x2={x} y2={y} stroke={axis === "X" ? "#d6452f" : axis === "Y" ? "#2f9d55" : "#2f7fd3"} strokeWidth={2} />
               <text x={x + (x - 70) * 0.25} y={y + (y - 520) * 0.25 + 3} textAnchor="middle">{axis}</text>
             </g>
           ) : <text key={axis} x={70} y={548 + (axis === "Z" ? 0 : 12)} textAnchor="middle">{axis} ⊙</text>)}
@@ -541,12 +547,13 @@ export function FrameCanvas({
           </text>
         ) : null}
       </svg>
+      </div>
       <div className={styles.canvasFooter}>
         <span>{model.nodes.length} nodes</span>
         <span>{model.members.length} members</span>
         <span>{model.supports.length} supports</span>
         {memberHeat ? <span className={styles.heatLegend}>low <i aria-hidden="true" /> high |{OVERLAY_CHOICES.find((choice) => choice.value === overlay)?.label}|</span> : null}
-        <span>{activeTool === "node" ? "Click to place a node on the working plane" : activeTool === "member" ? (pendingStart ? `From ${pendingStart}: click the end node · Esc to stop` : "Click a start node") : isEditableView ? "Drag nodes to move · drag background to pan · scroll to zoom" : "Drag to orbit · Shift-drag to pan · scroll to zoom"}</span>
+        <span className={styles.commandHint}>&gt; {activeTool === "node" ? "Click to place a node on the working plane" : activeTool === "member" ? (pendingStart ? `From ${pendingStart}: click the end node · Esc to stop` : "Click a start node") : isEditableView ? "Drag nodes to move · drag background to pan · scroll to zoom" : "Drag to orbit · Shift-drag to pan · scroll to zoom"}</span>
       </div>
     </div>
   );
