@@ -322,3 +322,77 @@
 .project-sidebar-item{grid-template-columns:20px minmax(0,1fr);column-gap:8px}.project-sidebar-item>small{grid-column:2}.status-icon{grid-row:1/span 2;align-self:center;display:grid;place-items:center;width:20px;height:20px;border-radius:5px;font-size:12px;font-style:normal;font-weight:900}.status-icon.is-pass{background:#e3f5e8;color:#1d7a3d}.status-icon.is-fail{background:#fde5e0;color:#c23a24}.status-icon.is-stale{background:#fff3d6;color:#9a6a00}.status-icon.is-info{background:#eef1ee;color:#6b7d76}.status-icon.is-none{background:transparent;color:#a3b1aa;border:1px dashed #c9d3cc}
 .calculation-workbench.is-sheet{grid-template-columns:minmax(0,1fr)}.calculation-output-pane.is-embedded{position:static;padding:14px}.calculator-launcher.is-sheet{max-width:none}.project-focused-calculation .calculator-launcher.is-sheet{padding-left:16px;padding-right:16px}
 .calculation-output-pane.is-embedded .calculation-output-empty-state{display:none}
+
+
+/* EngCalcs landing: drawing and model intelligence */
+.drawing-preview-grid{display:grid;grid-template-columns:1.08fr .92fr;gap:12px;margin-top:18px}
+.drawing-sheet,.model-facts{min-width:0;border:1px solid #e2e7e3;border-radius:10px;background:#fff;padding:12px}
+.sheet-toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;padding-bottom:9px;border-bottom:1px solid #edf0ee;color:#718078;font-size:8px}
+.sheet-toolbar b{color:#3d5c4d;font-size:8px;letter-spacing:.08em}
+.plan-sketch{position:relative;height:180px;margin-top:10px;background:
+linear-gradient(#f7f9f7 1px,transparent 1px),
+linear-gradient(90deg,#f7f9f7 1px,transparent 1px);
+background-size:18px 18px;border:1px solid #eef2ef;border-radius:7px;overflow:hidden}
+.plan-wall{position:absolute;background:#5b7568}
+.wall-a{left:18px;top:28px;width:150px;height:4px}
+.wall-b{left:18px;top:28px;width:4px;height:115px}
+.wall-c{left:18px;bottom:34px;width:150px;height:4px}
+.plan-opening{position:absolute;left:55px;bottom:50px;color:#566d62;font-size:9px}
+.plan-member{position:absolute;left:55px;top:70px;border:1px solid #78a48a;background:#eaf4ed;border-radius:4px;padding:3px 7px;color:#24573f;font-size:9px;font-weight:800}
+.plan-note{position:absolute;left:92px;top:75px;color:#7b8c84;font-size:8px}
+.model-facts{position:relative;padding-top:34px}
+.model-facts>small{font-size:8px;color:#75867e}
+.model-fact-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid #edf0ee;font-size:9px}
+.model-fact-row span{color:#718078}.model-fact-row b{color:#213c30}
+
+.pipeline-diagram{display:grid;grid-template-columns:1fr 96px 1fr 96px 1fr 96px 1fr 96px 1fr;gap:8px;align-items:center;margin:8px 0 36px}
+.pipeline-stage{min-height:150px;border:1px solid #dbe3dd;border-radius:13px;padding:17px;background:#fff;display:flex;flex-direction:column;justify-content:center;gap:6px}
+.pipeline-stage small{font-size:8px;letter-spacing:.1em;color:#7b8b84}
+.pipeline-stage strong{font-size:17px;letter-spacing:-.02em}
+.pipeline-stage span{font-size:10px;line-height:1.5;color:#6e7e77}
+.pipeline-stage.ai-stage{background:#ecf7ee;border-color:#cfe4d5}
+.pipeline-stage.calc-stage{background:#142c25;color:#fff;border-color:#28493d}
+.pipeline-stage.calc-stage small,.pipeline-stage.calc-stage span{color:#adc0b8}
+.pipeline-stage.output-stage{background:#f2f6ef}
+.pipeline-arrow{position:relative;text-align:center;color:#6b7d75;font-size:9px}
+.pipeline-arrow:after{content:"→";display:block;margin-top:6px;color:#315845;font-size:20px}
+.workflow-step-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1px solid #cfd7d1;border-left:1px solid #cfd7d1}
+.workflow-step-card{min-height:220px;padding:24px;border-right:1px solid #cfd7d1;border-bottom:1px solid #cfd7d1}
+.workflow-step-card h3{font-size:17px;margin:0 0 9px}
+.workflow-step-card p{font-size:13px;line-height:1.6;color:#63766e}
+
+.source-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+.source-card{min-height:140px;border:1px solid #d8e0da;border-radius:12px;background:#fff;padding:20px}
+.source-card strong{display:block;font-size:20px;letter-spacing:-.03em;margin-bottom:8px}
+.source-card p{margin:0;color:#687a72;font-size:13px;line-height:1.6}
+.cross-sheet-card{display:grid;grid-template-columns:.75fr 1.25fr;gap:28px;align-items:center;margin-top:28px;border:1px solid #d3ddd6;border-radius:16px;background:#fff;padding:28px}
+.cross-sheet-copy h3{font-size:32px;letter-spacing:-.04em;line-height:1.05;margin:0 0 12px}
+.cross-sheet-copy>p:last-child{margin:0;color:#64766e;line-height:1.65}
+.cross-sheet-flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;align-items:stretch}
+.source-evidence,.inference-card{border:1px solid #dfe6e1;border-radius:10px;padding:14px;background:#fbfcfa;display:grid;align-content:start;gap:5px}
+.source-evidence small,.inference-card small{font-size:8px;letter-spacing:.08em;color:#788980}
+.source-evidence b,.inference-card b{font-size:14px}
+.source-evidence span,.inference-card span{font-size:10px;line-height:1.45;color:#6e7f77}
+.cross-sheet-merge{grid-column:1/-1;text-align:center;color:#789085;font-size:18px;line-height:1}
+.inference-card{grid-column:1/-1;background:#142c25;border-color:#345046;color:#fff}
+.inference-card small,.inference-card span{color:#b5c6bf}
+.inference-card em{margin-top:5px;color:#c8ff65;font-size:9px;font-style:normal}
+
+@media(max-width:1100px){
+  .pipeline-diagram{grid-template-columns:1fr 42px 1fr 42px 1fr;row-gap:12px}
+  .pipeline-stage:nth-of-type(7),.pipeline-stage:nth-of-type(9){margin-top:0}
+  .workflow-step-grid{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:900px){
+  .cross-sheet-card{grid-template-columns:1fr}
+  .source-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:760px){
+  .drawing-preview-grid{grid-template-columns:1fr}
+  .pipeline-diagram{grid-template-columns:1fr}
+  .pipeline-arrow:after{content:"↓"}
+  .workflow-step-grid{grid-template-columns:1fr}
+  .source-grid{grid-template-columns:1fr}
+  .cross-sheet-flow{grid-template-columns:1fr}
+  .source-evidence,.inference-card,.cross-sheet-merge{grid-column:1}
+}
