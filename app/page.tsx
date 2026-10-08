@@ -6,7 +6,8 @@ const workflowSteps = [
   ["02", "AI builds the project model", "EngCalcs extracts geometry, member tags, levels, materials, openings, notes and relationships, then reconciles them across drawings and models."],
   ["03", "AI plans the design workflow", "The AI identifies design tasks, chooses the required calculation engines, maps dependencies and asks only for missing or uncertain inputs."],
   ["04", "Deterministic engines run", "Standards-based engines execute the engineering maths. Results do not rely on LLM arithmetic."],
-  ["05", "Engineer reviews and issues", "Inputs, assumptions, references, formulas, warnings and provenance remain visible before anything is issued."],
+  ["05", "Revisions propagate", "When architectural or model data changes, EngCalcs identifies affected inputs, marks dependent calculations stale and re-runs the calculation chain for review."],
+  ["06", "Engineer reviews and issues", "Inputs, assumptions, references, formulas, warnings, revisions and provenance remain visible before anything is issued."],
 ];
 
 const sourceTypes = [
@@ -19,12 +20,12 @@ const sourceTypes = [
 ];
 
 const calculatorGroups = [
-  ["Wind", "AS/NZS 1170.2", "Regional wind speed, terrain, shielding and design wind speed."],
-  ["Loads", "AS/NZS 1170", "Permanent, imposed and environmental actions linked into the project model."],
-  ["Steel", "AS 4100", "Member and connection design with visible utilisation and workings."],
-  ["Concrete", "AS 3600", "Member and footing design with transparent assumptions."],
-  ["Timber", "AS 1720", "Structural timber design with project-preferred sections."],
-  ["Foundations", "Project linked", "Carry reactions through to footing and retaining calculations."],
+  ["Wind", "AS/NZS 1170.2", "Regional wind speed, terrain, shielding and design wind speed.", "live"],
+  ["Steel", "AS 4100", "Member and connection design with visible utilisation and workings.", "live"],
+  ["Concrete", "AS 3600", "Member and footing design with transparent assumptions.", "live"],
+  ["Timber", "AS 1720", "Structural timber design with project-preferred sections.", "live"],
+  ["Hydraulic", "AS/NZS 3500", "Standards-based plumbing and drainage calculations linked to project inputs.", "live"],
+  ["Loads", "AS/NZS 1170", "Permanent, imposed and environmental actions linked into the project model.", "planned"],
 ];
 
 const features = [
@@ -32,6 +33,7 @@ const features = [
   ["Cross-sheet reasoning", "Architectural, structural and roof information can be reconciled to understand what an element is actually supporting."],
   ["AI workflow planning", "EngCalcs decomposes the design problem into the calculation chain required to solve it."],
   ["Deterministic calculation engines", "The AI never invents the final engineering maths. Versioned engines execute the standards-based calculations."],
+  ["Revision-aware design", "Architectural and model revisions are compared against the project model so EngCalcs can identify which calculations are affected and re-run the dependent chain."],
   ["Connected calculation graph", "Outputs from one calculation become typed inputs to the next, preserving source and dependency information."],
   ["Transparent review", "Every extracted input, assumption, formula, warning, reference and override remains reviewable."],
 ];
@@ -63,11 +65,11 @@ export default function Home() {
               <span className="kicker-dot" />
               Built for Australian practice
             </div>
-            <h1>Bring the drawings. <em>EngCalcs builds the design workflow.</em></h1>
+            <h1>Bring the project. <em>EngCalcs understands, calculates and keeps it current.</em></h1>
             <p className="hero-lead">
               EngCalcs interprets drawings, CAD/BIM data and engineering intent, turns them into a
-              structured project model, then plans the calculation chain. Deterministic engines run
-              the maths. You review, verify and issue the result.
+              structured project model, then plans and runs the calculation chain. When the design
+              changes, EngCalcs traces the impact and re-runs affected calculations for engineer review.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href="/signup">Create a workspace <span aria-hidden="true">→</span></Link>
@@ -76,7 +78,7 @@ export default function Home() {
             <div className="hero-proof">
               <span><b>AI understands</b> drawings & models</span>
               <span><b>AI plans</b> the workflow</span>
-              <span><b>Code proves</b> the calculation</span>
+              <span><b>Changes propagate</b> through the design</span>
             </div>
           </div>
 
@@ -137,7 +139,7 @@ export default function Home() {
 
                 <div className="audit-line">
                   <span className="audit-dot" />
-                  Sources reconciled across architectural, structural and model data
+                  Sources reconciled across architectural, structural and model data · revision-aware
                 </div>
               </div>
             </div>
@@ -148,7 +150,7 @@ export default function Home() {
       <section className="trust-strip">
         <div className="container trust-row">
           <span>Designed around the standards Australian engineers use</span>
-          <b>AS/NZS 1170</b><b>AS 4100</b><b>AS 3600</b><b>AS 1720</b><b>AS 3700</b>
+          <b>AS/NZS 1170.2</b><b>AS 4100</b><b>AS 3600</b><b>AS 1720</b><b>AS/NZS 3500</b>
         </div>
       </section>
 
@@ -156,11 +158,12 @@ export default function Home() {
         <div className="container">
           <div className="section-heading">
             <p className="eyebrow">From project information to engineering output</p>
-            <h2>Understand the design first. Then calculate it.</h2>
+            <h2>Understand the design. Calculate it. Keep it current when the design changes.</h2>
             <p>
               EngCalcs uses AI to interpret project information, reconcile it into a structured
-              engineering model and decide what needs to be designed. The calculation itself remains
-              deterministic, versioned and reviewable.
+              engineering model and decide what needs to be designed. When source geometry or
+              specifications change, the dependency graph shows what is affected and the relevant
+              calculation chain can be re-run. The maths remains deterministic, versioned and reviewable.
             </p>
           </div>
 
@@ -194,6 +197,27 @@ export default function Home() {
               <strong>Calculation pack</strong>
               <span>workings · references · assumptions · provenance</span>
             </div>
+          </div>
+
+          <div className="revision-loop" aria-label="Revision-aware calculation loop">
+            <div className="revision-source">
+              <small>ARCHITECTURAL REVISION</small>
+              <strong>A203 Rev C</strong>
+              <span>Rear opening: 4200 → 4500 mm</span>
+            </div>
+            <div className="revision-arrow">→</div>
+            <div className="revision-impact">
+              <small>AI IMPACT ANALYSIS</small>
+              <strong>3 calculations affected</strong>
+              <span>Beam B1 · Column C1 · Footing F1</span>
+            </div>
+            <div className="revision-arrow">→</div>
+            <div className="revision-rerun">
+              <small>RE-CALCULATE</small>
+              <strong>Dependent chain re-run</strong>
+              <span>New results held for engineer review</span>
+            </div>
+            <div className="revision-loopback">↺ source → model → calculations → review</div>
           </div>
 
           <div className="workflow-step-grid">
@@ -282,7 +306,8 @@ export default function Home() {
               <li>Every extracted value can retain its drawing/model source</li>
               <li>AI identifies the calculation modules required for each design task</li>
               <li>Outputs become typed inputs to downstream calculations</li>
-              <li>Drawing revisions can flag affected calculations for review</li>
+              <li>Architectural and model revisions identify affected calculations automatically</li>
+              <li>Dependent calculations can be re-run against the revised design</li>
             </ul>
           </div>
 
@@ -333,23 +358,25 @@ export default function Home() {
             </div>
             <p>
               Each calculation engine is versioned, standards-referenced and independently reviewable.
-              EngCalcs orchestrates them as one workflow while preserving the workings.
+              EngCalcs orchestrates them as one workflow while preserving the workings. Wind,
+              steel, concrete, timber and hydraulic calculation engines are already available.
             </p>
           </div>
 
           <div className="calculator-grid">
-            {calculatorGroups.map(([title, standard, description], index) => {
-              const isWindPreview = index === 0;
+            {calculatorGroups.map(([title, standard, description, status], index) => {
+              const isAvailable = status === "live";
+              const isWind = title === "Wind";
               return (
-                <article className={`calculator-card ${isWindPreview ? "live" : "planned"}`} key={title}>
+                <article className={`calculator-card ${isAvailable ? "live" : "planned"}`} key={title}>
                   <div className="calculator-top">
-                    <span>{isWindPreview ? "AVAILABLE IN PREVIEW" : "PLANNED"}</span>
+                    <span>{isAvailable ? "AVAILABLE" : "PLANNED"}</span>
                     <b>0{index + 1}</b>
                   </div>
                   <h3>{title}</h3>
                   <small>{standard}</small>
                   <p>{description}</p>
-                  {isWindPreview ? (
+                  {isWind ? (
                     <Link className="button button-light button-small" href="/dashboard/calculations?q=wind">
                       Open wind calculations <span aria-hidden="true">→</span>
                     </Link>
@@ -374,7 +401,7 @@ export default function Home() {
               assumptions, overrides and provenance visible.
             </p>
             <div className="team-points">
-              <span>Drawing & model intelligence</span><span>AI workflow planning</span>
+              <span>Drawing & model intelligence</span><span>Revision impact analysis</span>
               <span>Roles & review states</span><span>Reusable project defaults</span>
               <span>Calculation history</span><span>API access</span>
             </div>
@@ -386,10 +413,11 @@ export default function Home() {
         <div className="container cta-card">
           <div>
             <p className="eyebrow">EngCalcs early access</p>
-            <h2>From drawings to a reviewable calculation workflow.</h2>
+            <h2>From project model to calculations that stay aligned with the design.</h2>
             <p>
               Bring the project information. EngCalcs interprets the design, plans the engineering
-              workflow and runs deterministic calculation engines with the workings left visible.
+              workflow, runs deterministic calculation engines and traces design revisions through
+              dependent calculations with the workings left visible.
             </p>
           </div>
           <div className="cta-actions">
