@@ -5,6 +5,7 @@ import test from "node:test";
 
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const migration = await readFile(new URL("../migrations/20260928065237_calculation_revision_runs.sql", import.meta.url), "utf8");
+const namespaceMigration = await readFile(new URL("../migrations/20261009000000_engcalcs_rpc_aliases.sql", import.meta.url), "utf8");
 
 test("atomic revisions preserve history, reject conflicts/cycles/cross-project links and enforce RPC grants", async () => {
   const db = new PGlite();
@@ -29,12 +30,15 @@ test("atomic revisions preserve history, reject conflicts/cycles/cross-project l
       insert into projects values('${id(1)}','${id(2)}'),('${id(9)}','${id(2)}');
       insert into organisation_members values('${id(2)}','${id(3)}','engineer'),('${id(2)}','${id(4)}','viewer');
       grant all on all tables in schema public to service_role;
+      create function public.opencalcs_wind_workflow_action(uuid, uuid, uuid, text, jsonb, jsonb)
+        returns jsonb language sql as $$ select '{}'::jsonb $$;
     `);
     await db.exec(migration);
+    await db.exec(namespaceMigration);
     const save = async (calculation = null, parent = null, links = [], actor = id(3), project = id(1)) => {
       const run = { input_json: { value: 2 }, result_json: { value: 4 }, engine_plugin_id: "test", engine_plugin_version: "1",
         calculation_definition_version: "1", provenance_json: { linked_inputs: links }, input_hash: "test" };
-      return (await db.query("select opencalcs_save_run($1,$2,'test.calc','Test',$3::jsonb,$4,$5) as saved",
+      return (await db.query("select engcalcs_save_run($1,$2,'test.calc','Test',$3::jsonb,$4,$5) as saved",
         [project, actor, JSON.stringify(run), calculation, parent])).rows[0].saved;
     };
     const link = (source) => ({ source_calculation_id: source.calculationId, source_run_id: source.runId,
@@ -70,7 +74,7 @@ test("atomic revisions preserve history, reject conflicts/cycles/cross-project l
     assert.equal((await db.query("select count(*)::int as n from audit_events")).rows[0].n, 4);
     assert.equal((await db.query("select count(*)::int as n from calculation_links where target_calculation_id=$1", [b.calculationId])).rows[0].n, 1);
     for (const envelope of [null, {}, { input_json: {}, result_json: null, provenance_json: {} }]) {
-      await assert.rejects(db.query("select opencalcs_save_run($1,$2,'test.calc','Test',$3::jsonb)",
+      await assert.rejects(db.query("select engcalcs_save_run($1,$2,'test.calc','Test',$3::jsonb)",
         [id(1), id(3), JSON.stringify(envelope)]), /Invalid run envelope/);
     }
     await assert.rejects(save(null, null, [{ ...link(a2), target_input_path: "value" }]), /Invalid linked input path/);
@@ -79,5 +83,16 @@ test("atomic revisions preserve history, reject conflicts/cycles/cross-project l
     await assert.rejects(save(), /permission denied/);
     await db.exec("reset role; set role anon");
     await assert.rejects(save(), /permission denied/);
+    await db.exec("reset role; set role service_role");
+    const legacyRun = {
+      input_json: { value: 1 }, result_json: { value: 2 }, engine_plugin_id: "legacy",
+      engine_plugin_version: "1", calculation_definition_version: "1",
+      provenance_json: { linked_inputs: [] }, input_hash: "legacy",
+    };
+    const legacyResult = await db.query(
+      "select opencalcs_save_run($1,$2,'legacy.calc','Legacy',$3::jsonb,null,null) as saved",
+      [id(1), id(3), JSON.stringify(legacyRun)],
+    );
+    assert.equal(legacyResult.rows[0].saved.runSequence, 1);
   } finally { await db.close(); }
 });

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { OPENCALCS_API_URL } from "@/lib/config";
+import { ENGCALCS_API_URL } from "@/lib/config";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export async function GET() {
   }
 
   const response = await fetch(
-    `${OPENCALCS_API_URL.replace(/\/$/, "")}/api/v1/calculations`,
+    `${ENGCALCS_API_URL.replace(/\/$/, "")}/api/v1/calculations`,
     {
       headers: {
         Authorization: `Bearer ${sessionData.session.access_token}`,

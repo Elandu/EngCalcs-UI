@@ -1,6 +1,6 @@
-# OpenCalcs foundation and Stabileo review
+# EngCalcs foundation and Stabileo review
 
-Review date: 2026-09-28. Scope: current OpenCalcs-UI worktree, OpenCalcs frame plugin and linked-run architecture, OpenWind verification records, and Stabileo source/CI. This is a software and integration review; it does not repeat the licensed-standard audit or provide independent engineering sign-off.
+Review date: 2026-09-28. Scope: current EngCalcs-UI worktree, EngCalcs frame plugin and linked-run architecture, OpenWind verification records, and Stabileo source/CI. This is a software and integration review; it does not repeat the licensed-standard audit or provide independent engineering sign-off.
 
 Latest continuation: **2026-09-29**. The priority findings below record the original review;
 the continuation sections record implemented fixes and current evidence. Release acceptance
@@ -45,7 +45,7 @@ The OpenWind working tree includes preliminary AS 4055 classification and Sectio
 
 The AS/NZS 1170.2 verification record covers the 2021 base edition and leaves amendments/adoption and named independent engineering review pending. Its prior 631-test result is historical repository evidence, not a test rerun in this review. The AS 4055 code is still uncommitted locally. Do not describe either calculation path as fully independently approved.
 
-OpenCalcs `requirements-render.txt` pins OpenWind to `bc054f23d2645eb9dfe44b1b4b504a94ebec01db`; the local AS 4055 additions are outside that deployed source revision. A UI release alone will not deliver those backend capabilities.
+EngCalcs `requirements-render.txt` pins OpenWind to `bc054f23d2645eb9dfe44b1b4b504a94ebec01db`; the local AS 4055 additions are outside that deployed source revision. A UI release alone will not deliver those backend capabilities.
 
 ### 3. Make result presentation match the calculation scope
 
@@ -73,9 +73,9 @@ Inspected revision: [`7d87e551b765c88956df95b375e0ef0befda53f7`](https://github.
 | Engine | Rust with native/WASM exports, including linear and P-Delta solving and broader analysis modules. Availability in source does not establish UI completeness or fitness for every analysis. |
 | Verification | The benchmark ledger reports 5,655 engine-coupled passing tests at an older August revision and separately identifies 1,192 formula-only checks. Representative engine tests use analytical displacement/equilibrium assertions. These suites were inspected, not independently rerun. |
 | Current CI | Main's workflow run 36168692825 failed in a browser E2E slow-suite job; core engine and other jobs passed. Do not treat the current main revision as fully green. |
-| Runtime integration | The inspected backend has no solve HTTP endpoint. OpenCalcs needs a Rust service/native bridge, or a browser-solver architecture with independently defined trust and persistence rules. |
-| Data mapping | Stabileo uses numeric IDs/maps and MPa stiffness; the current OpenCalcs contract uses string IDs/arrays and kPa stiffness. Coordinates, section roll, local axes, signs, load cases/combinations and station output require explicit mapping. |
-| Licence | Stabileo and OpenCalcs both use AGPL-3.0. Preserve notices and confirm corresponding-source obligations for the chosen integration. Licensing alone does not rule out the pilot. |
+| Runtime integration | The inspected backend has no solve HTTP endpoint. EngCalcs needs a Rust service/native bridge, or a browser-solver architecture with independently defined trust and persistence rules. |
+| Data mapping | Stabileo uses numeric IDs/maps and MPa stiffness; the current EngCalcs contract uses string IDs/arrays and kPa stiffness. Coordinates, section roll, local axes, signs, load cases/combinations and station output require explicit mapping. |
+| Licence | Stabileo and EngCalcs both use AGPL-3.0. Preserve notices and confirm corresponding-source obligations for the chosen integration. Licensing alone does not rule out the pilot. |
 | Australian standards | A structural solver does not replace the AS/NZS 1170.2 or AS 4055 assessment, nor perform all member/connection design checks. Keep those as separate versioned calculations. |
 
 Sources:
@@ -120,7 +120,7 @@ Checks are run from a local NTFS source mirror because the mapped-drive developm
 The earlier findings above describe the starting point. This addendum records the new work.
 
 - OpenWind now supplies reviewed AS/NZS 1170.2 pressure cases and tributary member loads in
-  the OpenCalcs distributed-load contract. External/internal speeds remain separate;
+  the EngCalcs distributed-load contract. External/internal speeds remain separate;
   dynamic-sensitive cases, bad references, overlapping assignments and area imbalance fail.
   Coefficients and normal/axis alignment are reviewed inputs, not automatically selected.
 - AS 4055 adds simple flat/gable automatic zone areas, Table 4 net roof anchoring, and
@@ -146,7 +146,7 @@ Verification at this checkpoint:
   models, but its 8-element P-Delta cantilever reports +1.0120687687 kN root transverse
   reaction against +1 kN applied load. Deflection matches theory; equilibrium fails by
   1.2069%. Keep this failure visible and retain PyNite as production engine.
-- The comparison is reproducible in OpenCalcs `benchmarks/`, pinned to Stabileo
+- The comparison is reproducible in EngCalcs `benchmarks/`, pinned to Stabileo
   `7d87e551b765c88956df95b375e0ef0befda53f7`. No production solver was changed.
 - In-app UI acceptance remains blocked by the browser tool's saved-permissions security
   check. The rebuilt preview is running at http://127.0.0.1:3105.
@@ -195,7 +195,7 @@ Verification at this checkpoint:
   now passes without changing numerical expectations. A third-party deprecation warning remains.
   The final complete rerun after the API and speed-unit schema changes passed **684 tests**;
   affected Python files also pass Ruff.
-- Executed both new methods through the actual OpenCalcs registry with the current local
+- Executed both new methods through the actual EngCalcs registry with the current local
   OpenWind plugin; dispatch and attached calculation provenance passed. A local GDAL
   data-path warning appeared during imports; these fixtures do not use GIS data.
 - Rebuilt the pinned Stabileo adapter in an empty directory using the documented builder.
@@ -208,7 +208,7 @@ Verification at this checkpoint:
 
 1. Review and commit the scoped OpenWind source/tests/docs. Exclude local browser scratch,
    standards scans/OCR, credentials and unrelated worktree changes.
-2. Update OpenCalcs' pinned OpenWind revision to that actual commit, package the selected
+2. Update EngCalcs' pinned OpenWind revision to that actual commit, package the selected
    production PyNite path, and verify the new registry definitions in the deployed API.
 3. Apply all three additive migrations and deploy the updated v2/v3 and Wind run/review/issue
    edge runners. Verify membership,
@@ -223,7 +223,7 @@ confirmation. PyNite remains the production solver; Stabileo is an isolated comp
 ### Wind lifecycle transaction and frame import review
 
 The legacy specialist workflow wrote separate stage runs and could reset issued workflows
-to draft. It is now replaced locally by `opencalcs_wind_workflow_action`, coordinating
+to draft. It is now replaced locally by `engcalcs_wind_workflow_action`, coordinating
 all six stage runs, exact parents, overrides, audit, review and issue under the same project
 lock as standalone revisions. Each stage records the exact six-run snapshot. The UI sends
 the displayed calculation-to-run map and prevents mutations of issued workflows.
@@ -264,14 +264,14 @@ No production data or schema was changed during this review.
 - A fresh locked OpenWind environment passed the complete **684-test suite**, with one
   third-party AnyIO deprecation warning. The new wheel/source archive built successfully;
   module bytes match the worktree and the source archive excludes local scratch and env files.
-- A separate combined OpenCalcs/OpenWind/PyNite environment passed **16 backend/plugin
+- A separate combined EngCalcs/OpenWind/PyNite environment passed **16 backend/plugin
   tests**. Its new ASGI bridge test reproduces OpenWind's host policy; the bridge now uses
   `localhost`, matching the documented allowlist. One Starlette/httpx deprecation warning remains.
 - The actual PyNite plugin passed all **5 analytical fixtures** again. Stabileo's earlier
   reproduced P-Delta reaction failure remains unresolved; no solver switch is proposed.
 - All three repositories were fetched before preparing coordinated wind-frame
   branches. OpenWind is committed as `d0a3ae2615241f932b93cf93ae8324142a446177`.
-  OpenCalcs is committed as `b40d4faf76bb1b849dba909a71f91f5748d2fece` and now pins that
+  EngCalcs is committed as `b40d4faf76bb1b849dba909a71f91f5748d2fece` and now pins that
   exact OpenWind commit in `requirements-render.txt`. These are review branches; remote
   production, authenticated browser acceptance and release publication remain pending.
 

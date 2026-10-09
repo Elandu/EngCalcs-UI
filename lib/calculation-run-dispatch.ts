@@ -1,7 +1,7 @@
 export type CalculationRunnerFunction =
-  | "opencalcs-run-calculation"
-  | "opencalcs-run-calculation-v2"
-  | "opencalcs-run-calculation-v3";
+  | "engcalcs-run-calculation"
+  | "engcalcs-run-calculation-v2"
+  | "engcalcs-run-calculation-v3";
 
 export type CalculationRunFailure = {
   message: string;
@@ -29,10 +29,10 @@ export function calculationRunnerFunction(
   hasLinkedInputs: boolean,
   revision = false,
 ): CalculationRunnerFunction {
-  if (revision) return "opencalcs-run-calculation-v3";
+  if (revision) return "engcalcs-run-calculation-v3";
   return hasLinkedInputs
-    ? "opencalcs-run-calculation-v2"
-    : "opencalcs-run-calculation";
+    ? "engcalcs-run-calculation-v2"
+    : "engcalcs-run-calculation";
 }
 
 export function calculationRunFailure(

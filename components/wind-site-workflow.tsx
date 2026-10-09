@@ -206,7 +206,7 @@ export function WindSiteWorkflow({
     try {
       const supabase = createClient();
       const { data, error } = await supabase.functions.invoke(
-        "opencalcs-run-wind-workflow",
+        "engcalcs-run-wind-workflow",
         {
           body: {
             projectId,

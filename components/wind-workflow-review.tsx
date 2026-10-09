@@ -369,7 +369,7 @@ export function WindWorkflowReview({
 
   async function reviewAction(action: "submit" | "approve" | "request_changes") {
     await invoke(
-      "opencalcs-review-wind-workflow",
+      "engcalcs-review-wind-workflow",
       {
         projectId,
         workflowInstanceId,
@@ -422,7 +422,7 @@ export function WindWorkflowReview({
     }
 
     const data = await invoke(
-      "opencalcs-run-wind-workflow",
+      "engcalcs-run-wind-workflow",
       {
         projectId,
         workflowInstanceId,
@@ -443,7 +443,7 @@ export function WindWorkflowReview({
 
   async function issue() {
     const data = await invoke(
-      "opencalcs-issue-wind-workflow",
+      "engcalcs-issue-wind-workflow",
       { projectId, workflowInstanceId, expectedRunIds },
       "Issued calculation pack created.",
     );
@@ -454,7 +454,7 @@ export function WindWorkflowReview({
 
   async function downloadReport(reportId: string) {
     const data = await invoke(
-      "opencalcs-download-report",
+      "engcalcs-download-report",
       { reportId },
       "Download link created.",
     );

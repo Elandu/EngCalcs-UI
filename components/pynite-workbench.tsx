@@ -229,7 +229,13 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     let active = true;
     const timer = window.setTimeout(() => {
       try {
-        const raw = window.localStorage.getItem(`opencalcs:pynite:${projectId}`);
+        const currentKey = `engcalcs:pynite:${projectId}`;
+        const current = window.localStorage.getItem(currentKey);
+        const legacy = current === null
+          ? window.localStorage.getItem(`opencalcs:pynite:${projectId}`)
+          : null;
+        const raw = current ?? legacy;
+        if (current === null && legacy !== null) window.localStorage.setItem(currentKey, legacy);
         if (raw) {
           const draft = JSON.parse(raw) as { title?: unknown; inputs?: unknown; windSourceLink?: unknown; activeSavedRun?: unknown };
           if (typeof draft.title === "string" && isPyniteInputs(draft.inputs)) {
@@ -271,7 +277,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     if (!hydrated) return;
     try {
       window.localStorage.setItem(
-        `opencalcs:pynite:${projectId}`,
+        `engcalcs:pynite:${projectId}`,
         JSON.stringify({ title, inputs: { ...inputs, analysis_type: analysisType }, windSourceLink, activeSavedRun }),
       );
     } catch {
@@ -284,7 +290,10 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
-        setShowTip(window.localStorage.getItem("opencalcs:pynite:tip-dismissed") !== "1");
+        const dismissed = window.localStorage.getItem("engcalcs:pynite:tip-dismissed") ??
+          window.localStorage.getItem("opencalcs:pynite:tip-dismissed");
+        if (dismissed === "1") window.localStorage.setItem("engcalcs:pynite:tip-dismissed", "1");
+        setShowTip(dismissed !== "1");
       } catch {
         setShowTip(true);
       }
@@ -295,7 +304,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
   function dismissTip() {
     setShowTip(false);
     try {
-      window.localStorage.setItem("opencalcs:pynite:tip-dismissed", "1");
+      window.localStorage.setItem("engcalcs:pynite:tip-dismissed", "1");
     } catch {
       // Storage unavailable; the tip simply returns next visit.
     }
@@ -816,7 +825,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
 
   function exportModel() {
     const file = new Blob(
-      [JSON.stringify({ format: "opencalcs-pynite-model", version: 1, title, inputs: { ...inputs, analysis_type: analysisType } }, null, 2)],
+      [JSON.stringify({ format: "engcalcs-pynite-model", version: 1, title, inputs: { ...inputs, analysis_type: analysisType } }, null, 2)],
       { type: "application/json" },
     );
     const href = URL.createObjectURL(file);
@@ -831,10 +840,13 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const parsed = JSON.parse(await file.text()) as { title?: unknown; inputs?: unknown };
+      const parsed = JSON.parse(await file.text()) as { format?: unknown; title?: unknown; inputs?: unknown };
+      if (parsed.format !== undefined && parsed.format !== "engcalcs-pynite-model" && parsed.format !== "opencalcs-pynite-model") {
+        throw new Error("The file does not contain a supported EngCalcs PyNite frame model.");
+      }
       const importedInputs = "inputs" in parsed ? parsed.inputs : parsed;
       if (!isPyniteInputs(importedInputs)) {
-        throw new Error("The file does not contain a supported OpenCalcs PyNite frame model.");
+        throw new Error("The file does not contain a supported EngCalcs PyNite frame model.");
       }
       analysisRevision.current += 1;
       const normalizedInputs = normalizePyniteInputs(importedInputs);
@@ -1164,7 +1176,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
                     ))}
                   </div>
                 ))}
-                <p className={styles.helpText}>Combination factors are user inputs. OpenCalcs does not infer a design standard or prescribe factors.</p>
+                <p className={styles.helpText}>Combination factors are user inputs. EngCalcs does not infer a design standard or prescribe factors.</p>
               </section>
             </div>
           ) : null}
@@ -1335,7 +1347,7 @@ export function PyniteWorkbench({ projectId, projectName, canRun, savedRuns, win
           )}
           <div className={styles.inspectorFooter}>
             <span>Engineering review required</span>
-            <p>PyNite provides elastic analysis results. OpenCalcs does not infer code compliance from this model.</p>
+            <p>PyNite provides elastic analysis results. EngCalcs does not infer code compliance from this model.</p>
           </div>
         </aside>
       </div>

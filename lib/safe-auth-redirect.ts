@@ -1,5 +1,5 @@
 const DEFAULT_AUTH_REDIRECT = "/dashboard";
-const AUTH_REDIRECT_ORIGIN = "https://opencalcs.local";
+const AUTH_REDIRECT_ORIGIN = "https://engcalcs.local";
 
 export function safeAuthRedirectUrl(
   next: string | null,

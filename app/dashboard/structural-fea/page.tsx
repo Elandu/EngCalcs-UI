@@ -74,7 +74,7 @@ export default async function StructuralProjectsPage() {
         ) : (
           <div className="project-list-empty">
             <h2>Create a project first</h2>
-            <p>Structural models and saved analysis runs belong to an OpenCalcs project.</p>
+            <p>Structural models and saved analysis runs belong to an EngCalcs project.</p>
             <Link className="button button-primary" href="/dashboard/projects/new">
               Create a project
             </Link>

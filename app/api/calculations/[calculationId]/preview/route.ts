@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { PREVIEWABLE_CALCULATION_IDS } from "@/lib/calculation-catalogue";
 import { previewFailure } from "@/lib/calculation-preview";
-import { OPENCALCS_API_URL } from "@/lib/config";
+import { ENGCALCS_API_URL } from "@/lib/config";
 import { SlidingWindowLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -72,7 +72,7 @@ export async function POST(
     let response: Response;
     try {
       response = await fetch(
-        `${OPENCALCS_API_URL.replace(/\/$/, "")}/api/v1/calculations/${encodeURIComponent(calculationId)}/run`,
+        `${ENGCALCS_API_URL.replace(/\/$/, "")}/api/v1/calculations/${encodeURIComponent(calculationId)}/run`,
         {
           method: "POST",
           headers: {

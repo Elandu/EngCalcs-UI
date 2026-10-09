@@ -112,7 +112,7 @@ export default async function DashboardPage() {
           </article>
           <article className="summary-card">
             <span>Calculation engine</span>
-            <strong>OpenCalcs API</strong>
+            <strong>EngCalcs API</strong>
             <small>Versioned definitions and runs</small>
           </article>
         </div>

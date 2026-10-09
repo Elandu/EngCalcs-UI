@@ -4,6 +4,8 @@ import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 
 const migration = await readFile(new URL("../migrations/20260929061116_wind_workflow_transactions.sql", import.meta.url), "utf8");
+const revisionMigration = await readFile(new URL("../migrations/20260928065237_calculation_revision_runs.sql", import.meta.url), "utf8");
+const namespaceMigration = await readFile(new URL("../migrations/20261009000000_engcalcs_rpc_aliases.sql", import.meta.url), "utf8");
 const writeBoundary = await readFile(new URL("../migrations/20260929063214_calculation_write_boundary.sql", import.meta.url), "utf8");
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const keys = ["site", "wind_region", "terrain", "shielding", "topography", "design"];
@@ -51,10 +53,12 @@ async function setup() {
       ('${id(2)}','${id(5)}','viewer'),('${id(10)}','${id(3)}','engineer');
     grant all on all tables in schema public to service_role;
   `);
+  await db.exec(revisionMigration);
   await db.exec(migration);
+  await db.exec(namespaceMigration);
   await db.exec("set role service_role");
   const action = async (kind, workflow = null, expected = {}, data = {}, actor = id(3), project = id(1)) =>
-    (await db.query("select opencalcs_wind_workflow_action($1,$2,$3,$4,$5::jsonb,$6::jsonb) result",
+    (await db.query("select engcalcs_wind_workflow_action($1,$2,$3,$4,$5::jsonb,$6::jsonb) result",
       [project, actor, workflow, kind, JSON.stringify(expected), JSON.stringify(data)])).rows[0].result;
   return { db, action };
 }
@@ -178,5 +182,17 @@ test("direct client writes cannot bypass workflow transactions or issued protect
     await assert.rejects(action("save", saved.workflowInstanceId, heads(saved), payload()), /Issued Wind workflows/);
     const next = await action("save", null, {}, payload());
     assert.equal(next.runs.length, 6, "authorized edge RPC remains usable after privilege restriction");
+  } finally { await db.close(); }
+});
+
+
+test("legacy OpenCalcs workflow RPC name remains callable", async () => {
+  const { db } = await setup();
+  try {
+    const legacy = await db.query(
+      "select opencalcs_wind_workflow_action($1,$2,$3,$4,$5::jsonb,$6::jsonb) result",
+      [id(1), id(3), null, "save", JSON.stringify({}), JSON.stringify(payload())],
+    );
+    assert.equal(legacy.rows[0].result.runs.length, 6);
   } finally { await db.close(); }
 });

@@ -1,3 +1,2 @@
-// Preserve the original endpoint for existing clients while sharing the validated,
-// atomic create-run implementation with linked calculations.
-import "../opencalcs-run-calculation-v2/index.ts";
+// Compatibility endpoint for clients still calling opencalcs-run-calculation.
+import "../engcalcs-run-calculation/index.ts";

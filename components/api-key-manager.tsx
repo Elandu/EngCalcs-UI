@@ -67,7 +67,7 @@ export function ApiKeyManager({
     setRawKey("");
 
     const supabase = createClient();
-    const { data, error } = await supabase.functions.invoke("opencalcs-api-keys", {
+    const { data, error } = await supabase.functions.invoke("engcalcs-api-keys", {
       body: {
         action: "create",
         organisation_id: organisationId,
@@ -98,7 +98,7 @@ export function ApiKeyManager({
     setMessage("");
 
     const supabase = createClient();
-    const { data, error } = await supabase.functions.invoke("opencalcs-api-keys", {
+    const { data, error } = await supabase.functions.invoke("engcalcs-api-keys", {
       body: {
         action: "revoke",
         api_key_id: apiKeyId,

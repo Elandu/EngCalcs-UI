@@ -21,7 +21,7 @@ export default async function LoginPage({
       </div>
       <section className="auth-card">
         <p className="eyebrow">Welcome back</p>
-        <h1>Sign in to OpenCalcs</h1>
+        <h1>Sign in to EngCalcs</h1>
         <p>Open your projects, calculations and review history.</p>
         <AuthForm mode="login" confirmationFailed={confirmationFailed} redirectTo={redirectTo} />
       </section>

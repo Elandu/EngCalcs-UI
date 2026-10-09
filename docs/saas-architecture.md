@@ -1,8 +1,8 @@
-# OpenCalcs SaaS architecture
+# EngCalcs SaaS architecture
 
-OpenCalcs is split deliberately between the SaaS application and the engineering calculation runtime.
+EngCalcs is split deliberately between the SaaS application and the engineering calculation runtime.
 
-## OpenCalcs UI
+## EngCalcs UI
 
 Next.js owns the product experience:
 
@@ -17,7 +17,7 @@ Next.js owns the product experience:
 
 ## Supabase
 
-Use a dedicated OpenCalcs Supabase project for application state, not engineering formula execution.
+Use a dedicated EngCalcs Supabase project for application state, not engineering formula execution.
 
 Initial responsibilities:
 
@@ -36,9 +36,9 @@ The browser uses only the project URL and publishable key. Secret/service-role c
 
 Every table exposed through the Data API must use Row Level Security. Organisation access should be checked through membership records rather than user-editable auth metadata.
 
-## OpenCalcs runtime
+## EngCalcs runtime
 
-The Python OpenCalcs service remains authoritative for calculation discovery and execution.
+The Python EngCalcs service remains authoritative for calculation discovery and execution.
 
 The UI sends typed inputs to the runtime. The runtime discovers the installed versioned engineering package (for example OpenWind-AU), executes the calculation and returns structured results with engineering provenance.
 
@@ -138,8 +138,8 @@ and saves the resolved inputs and mapping together. Scalar values and complete
 JSON objects can be linked when the target schema accepts them. No unit
 conversion is implicit.
 
-The generic `opencalcs-run-calculation` function remains the standalone path.
-`opencalcs-run-calculation-v2` is the linked path; deploy it to the project's
+The generic `engcalcs-run-calculation` function remains the standalone path.
+`engcalcs-run-calculation-v2` is the linked path; deploy it to the project's
 Supabase environment before enabling linked runs in a deployed UI.
 
 ### reports

@@ -77,7 +77,7 @@ test("original endpoint saves an unlinked run and audit through one atomic RPC",
   assert.equal(saved.runId, "saved-run");
   assert.equal(calls.length, 1);
   const { name, payload } = calls[0];
-  assert.equal(name, "opencalcs_save_run");
+  assert.equal(name, "engcalcs_save_run");
   assert.equal(payload.p_actor_id, "actor");
   assert.equal(payload.p_expected_run_id, null);
   assert.equal(payload.p_calculation_id, null);

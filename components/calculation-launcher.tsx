@@ -70,14 +70,19 @@ function isSectionCalculation(id?: string) {
 type Draft = { title: string; values: SchemaRecord };
 
 function draftKey(projectId: string, calculationId: string) {
-  return `opencalcs:calc-draft:${projectId}:${calculationId}`;
+  return `engcalcs:calc-draft:${projectId}:${calculationId}`;
 }
 
 /** Unsaved section-editor inputs kept in this browser so a reload or navigation does not lose work. */
 function loadDraft(projectId: string, calculationId: string): Draft | null {
   if (!isSectionCalculation(calculationId)) return null;
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(draftKey(projectId, calculationId)) ?? "null");
+    const currentKey = draftKey(projectId, calculationId);
+    const legacyKey = `opencalcs:calc-draft:${projectId}:${calculationId}`;
+    const current = window.localStorage.getItem(currentKey);
+    const raw = current ?? window.localStorage.getItem(legacyKey);
+    if (current === null && raw !== null) window.localStorage.setItem(currentKey, raw);
+    const parsed = JSON.parse(raw ?? "null");
     return parsed && typeof parsed.title === "string" && isJsonObject(parsed.values) ? parsed : null;
   } catch {
     return null;

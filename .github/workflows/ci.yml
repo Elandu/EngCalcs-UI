@@ -42,12 +42,12 @@ jobs:
           cp lib/workflow-output-schema.* "$check_root/lib/"
           cd "$check_root"
           for entrypoint in \
-            supabase/functions/opencalcs-run-calculation/index.ts \
-            supabase/functions/opencalcs-run-calculation-v2/index.ts \
-            supabase/functions/opencalcs-run-calculation-v3/index.ts \
-            supabase/functions/opencalcs-run-wind-workflow/index.ts \
-            supabase/functions/opencalcs-review-wind-workflow/index.ts \
-            supabase/functions/opencalcs-issue-wind-workflow/index.ts; do
+            supabase/functions/engcalcs-run-calculation/index.ts \
+            supabase/functions/engcalcs-run-calculation-v2/index.ts \
+            supabase/functions/engcalcs-run-calculation-v3/index.ts \
+            supabase/functions/engcalcs-run-wind-workflow/index.ts \
+            supabase/functions/engcalcs-review-wind-workflow/index.ts \
+            supabase/functions/engcalcs-issue-wind-workflow/index.ts; do
             deno check --no-config --node-modules-dir=none "$entrypoint"
           done
 
