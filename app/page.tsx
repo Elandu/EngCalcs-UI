@@ -435,7 +435,7 @@ export default function Home() {
             <a href="#workflow">AI workflow</a>
             <a href="#drawings">Drawings & models</a>
             <a href="#calculators">Engines</a>
-            <a href="https://github.com/Elandu/OpenCalcs-UI" target="_blank" rel="noreferrer">GitHub ↗</a>
+            <a href="https://github.com/Elandu/OpenCalcs" target="_blank" rel="noreferrer">GitHub ↗</a>
           </div>
           <small>© 2026 EngCalcs</small>
         </div>
