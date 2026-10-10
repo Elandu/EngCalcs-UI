@@ -7,6 +7,10 @@ const migration = await readFile(
   new URL("../migrations/20261010113000_engineering_source_provenance.sql", import.meta.url),
   "utf8",
 );
+const storageMigration = await readFile(
+  new URL("../migrations/20261010121000_private_project_source_documents.sql", import.meta.url),
+  "utf8",
+);
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 test("source evidence is tenant-scoped, proposals are manually proposed and immutable, reviewer decisions are append-only", async () => {
@@ -14,7 +18,17 @@ test("source evidence is tenant-scoped, proposals are manually proposed and immu
   try {
     await db.exec(`
       create role anon; create role authenticated; create role service_role;
-      create schema auth; create schema app_private;
+      create schema auth; create schema app_private; create schema storage;
+      create table storage.buckets (
+        id text primary key, name text not null, public boolean,
+        file_size_limit bigint, allowed_mime_types text[]
+      );
+      create table storage.objects (
+        id uuid primary key default gen_random_uuid(),
+        bucket_id text references storage.buckets(id), name text not null
+      );
+      grant usage on schema storage to authenticated;
+      grant select,insert on storage.objects to authenticated;
       create table auth.users(id uuid primary key);
       create function auth.uid() returns uuid language sql stable
         as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
@@ -41,6 +55,7 @@ test("source evidence is tenant-scoped, proposals are manually proposed and immu
         $$;
       grant execute on function app_private.user_has_project_role(uuid,text[]) to authenticated;
       grant all on public.calculations, public.calculation_links to authenticated;
+      grant select on public.projects to authenticated;
       insert into auth.users values
         ('${id(3)}'),('${id(4)}'),('${id(5)}'),('${id(6)}');
       insert into public.projects values ('${id(1)}','${id(2)}'),('${id(9)}','${id(8)}');
@@ -53,6 +68,9 @@ test("source evidence is tenant-scoped, proposals are manually proposed and immu
         ('${id(12)}','${id(9)}','draft');
     `);
     await db.exec(migration);
+    await db.exec(storageMigration);
+    const bucket = (await db.query(`select public, file_size_limit, allowed_mime_types from storage.buckets where id='engineering-project-sources'`)).rows[0];
+    assert.deepEqual(bucket, { public: false, file_size_limit: 10485760, allowed_mime_types: ["application/pdf"] });
 
     const rights = (await db.query(`
       select has_table_privilege('authenticated','public.calculations','INSERT') as can_insert_calc,
@@ -78,6 +96,16 @@ test("source evidence is tenant-scoped, proposals are manually proposed and immu
       values($1,'drawing','Architectural A-101','Sheet A-101 Rev C') returning id,project_id
     `, [id(1)])).rows[0];
     assert.equal(source.project_id, id(1));
+    await assert.rejects(db.query(`
+      insert into public.engineering_sources(project_id, source_kind, title, source_reference, storage_path, storage_byte_size, storage_mime_type, content_sha256)
+      values($1,'drawing','Forged PDF','A-102',$2,100,'application/pdf',$3)
+    `, [id(1), `${id(1)}/${id(13)}.pdf`, "a".repeat(64)]), /row-level security/);
+
+    const ownedPath = `${id(1)}/${id(15)}.pdf`;
+    const alienPath = `${id(9)}/${id(16)}.pdf`;
+    await db.query(`insert into storage.objects(bucket_id,name) values('engineering-project-sources',$1)`, [ownedPath]);
+    await assert.rejects(db.query(`insert into storage.objects(bucket_id,name) values('engineering-project-sources',$1)`, [alienPath]), /row-level security/);
+    assert.equal((await db.query(`select count(*)::int as n from storage.objects`)).rows[0].n, 1);
 
     const proposed = (await db.query(`
       insert into public.engineering_input_proposals
@@ -100,6 +128,8 @@ test("source evidence is tenant-scoped, proposals are manually proposed and immu
     await assert.rejects(db.query("delete from public.engineering_sources where id=$1", [source.id]), /permission denied/);
 
     await db.query("select set_config('request.jwt.claim.sub',$1,false)", [id(4)]);
+    assert.equal((await db.query(`select count(*)::int as n from storage.objects`)).rows[0].n, 1);
+    await assert.rejects(db.query(`insert into storage.objects(bucket_id,name) values('engineering-project-sources',$1)`, [`${id(1)}/${id(17)}.pdf`]), /row-level security/);
     assert.equal((await db.query("select count(*)::int as n from public.engineering_sources")).rows[0].n, 1);
     await assert.rejects(db.query(`
       insert into public.engineering_sources(project_id,source_kind,title,source_reference)
@@ -125,6 +155,7 @@ test("source evidence is tenant-scoped, proposals are manually proposed and immu
     assert.equal((await db.query("select count(*)::int as n from public.engineering_sources")).rows[0].n, 0);
     assert.equal((await db.query("select count(*)::int as n from public.engineering_input_proposals")).rows[0].n, 0);
     assert.equal((await db.query("select count(*)::int as n from public.engineering_proposal_decisions")).rows[0].n, 0);
+    assert.equal((await db.query("select count(*)::int as n from storage.objects")).rows[0].n, 0);
     await assert.rejects(db.query(`
       insert into public.engineering_proposal_decisions(project_id,proposal_id,decision,review_note)
       values($1,$2,'accepted','Cross tenant')
