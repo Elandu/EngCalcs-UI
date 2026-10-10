@@ -35,16 +35,17 @@ export async function POST(
     return reply({ error: "Source metadata is required." }, 400);
   }
   const body = raw as Record<string, unknown>;
-  if (!validSourceCreate(body) || typeof body.path !== "string" ||
-      !body.path.startsWith(projectId + "/") ||
-      !new RegExp("^" + projectId + "/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}[.]pdf$").test(body.path)) {
+  const uploadPath = body.path;
+  if (!validSourceCreate(body) || typeof uploadPath !== "string" ||
+      !uploadPath.startsWith(projectId + "/") ||
+      !new RegExp("^" + projectId + "/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}[.]pdf$").test(uploadPath)) {
     return reply({ error: "Invalid source PDF path or evidence reference." }, 400);
   }
 
   const { data, error } = await access.client.functions.invoke("engcalcs-verify-source-upload", {
     body: {
       projectId,
-      path: body.path,
+      path: uploadPath,
       kind: body.kind,
       title: body.title,
       revisionLabel: body.revisionLabel ?? "",
