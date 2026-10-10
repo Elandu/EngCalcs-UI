@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { calculationCatalogue, calculationGuide, calculationWorkspaceHref, WIND_ASSESSMENT_ID, type CatalogueDefinition as Definition } from "@/lib/calculation-catalogue";
+import { connectionsForCalculation, engineeringConnectionLabel, type EngineeringConnection } from "@/lib/engineering-module-contracts";
 
 type Project = { id: string; name: string; project_number: string | null; address: string | null };
 
@@ -30,6 +31,8 @@ export function CalculationLibrary({
 }) {
   const router = useRouter();
   const [definitions, setDefinitions] = useState<Definition[]>([]);
+  const [connections, setConnections] = useState<EngineeringConnection[]>([]);
+  const [connectionsAvailable, setConnectionsAvailable] = useState(true);
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState("all");
   const [projectId, setProjectId] = useState(initialProjectId);
@@ -61,6 +64,30 @@ export function CalculationLibrary({
     return () => { active = false; };
   }, [reloadKey]);
 
+  useEffect(() => {
+    let active = true;
+    fetch("/api/connections", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Dependency catalogue is not available.");
+        const payload: unknown = await response.json();
+        if (!Array.isArray(payload)) throw new Error("Invalid dependency catalogue.");
+        return payload as EngineeringConnection[];
+      })
+      .then((items) => {
+        if (active) {
+          setConnections(items);
+          setConnectionsAvailable(true);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setConnections([]);
+          setConnectionsAvailable(false);
+        }
+      });
+    return () => { active = false; };
+  }, [reloadKey]);
+
   const categories = useMemo(
     () => [...new Set(definitions.map((item) => item.category).filter(Boolean))].sort(),
     [definitions],
@@ -74,6 +101,7 @@ export function CalculationLibrary({
   }, [category, definitions, query]);
   const selected = filtered.find((item) => item.id === selectedId) ?? filtered[0];
   const guide = calculationGuide(selected?.id);
+  const selectedConnections = selected ? connectionsForCalculation(connections, selected.id) : [];
 
   function useCalculation() {
     if (!selected || !projectId) return;
@@ -167,6 +195,23 @@ export function CalculationLibrary({
               <p className="eyebrow">Calculation details</p>
               <h2>{selected.name}</h2>
               <p>{guide?.summary ?? selected.description}</p>
+              {selectedConnections.length ? (
+                <section className="library-integration-map" aria-label="Engineering calculation connections">
+                  <h3>Connected engineering workflows</h3>
+                  <p>Compatibility information only. Every transferred input still requires engineering review.</p>
+                  <ul>
+                    {selectedConnections.map((link) => (
+                      <li key={link.id}>
+                        <strong>{link.source_calculation_id === selected.id ? "Feeds" : "Uses"}: {link.source_calculation_id === selected.id ? link.target_calculation_id : link.source_calculation_id}</strong>
+                        <span>{engineeringConnectionLabel(link)}</span>
+                        <small>{link.reason}</small>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : !connectionsAvailable ? (
+                <p className="library-muted">Engineering dependency details are temporarily unavailable. Calculations remain accessible.</p>
+              ) : null}
               {guide ? (
                 <div className="library-guide">
                   <span className="library-scope-badge">{guide.scope}</span>
