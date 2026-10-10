@@ -100,6 +100,7 @@ export default function Home() {
             <a href="#problem">The problem</a>
             <a href="#product">The product</a>
             <a href="#ai">How AI fits</a>
+            <Link href="/demo">See demo</Link>
             <Link href="/company">Company</Link>
           </nav>
           <div className="landing-header-actions">
@@ -120,8 +121,8 @@ export default function Home() {
               time transferring data between tools and checking what changed.
             </p>
             <div className="landing-hero-actions">
-              <Link className="landing-button" href="/signup">Explore the workspace <span aria-hidden="true">↗</span></Link>
-              <a className="landing-button landing-button-outline" href="#product">See what is built <span aria-hidden="true">↓</span></a>
+              <Link className="landing-button" href="/demo">Explore the revision demo <span aria-hidden="true">↗</span></Link>
+              <Link className="landing-button landing-button-outline" href="/signup">Open the workspace <span aria-hidden="true">↗</span></Link>
             </div>
             <p className="landing-stage">
               Early-stage platform with working engineering calculation modules.
@@ -313,6 +314,7 @@ export default function Home() {
               <a href="#product">Product</a>
               <a href="#ai">AI</a>
               <Link href="/login">Log in</Link>
+              <Link href="/demo">Demo</Link>
               <Link href="/company">Company</Link>
             </div>
           </div>
