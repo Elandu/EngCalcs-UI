@@ -19,3 +19,13 @@
 .calculation-link-note{margin:14px 0 0;color:#65766f;font-size:11px}
 @media(max-width:960px){.calculation-link-builder-controls{grid-template-columns:1fr 1fr}.calculation-link-builder-controls>.button{justify-self:start}}
 @media(max-width:640px){.calculation-link-builder{padding:16px}.calculation-link-builder-controls{grid-template-columns:1fr}.calculation-link-draft-list li{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.calculation-link-draft-list .schema-remove-row{grid-column:1/-1;justify-self:end}}
+
+/* Advisory cross-standard connection catalogue; not an execution control. */
+.library-integration-map{padding:17px 19px;margin:18px 0;border:1px solid #ccdacd;background:#f5f8f3;border-radius:5px}
+.library-integration-map h3{font-size:15px;letter-spacing:-.025em;margin:0 0 7px;color:#254636}
+.library-integration-map>p{margin:0 0 11px;color:#5d7062;font-size:11px;line-height:1.6}
+.library-integration-map ul{padding:0;margin:0;list-style:none}
+.library-integration-map li{padding:12px 0;border-top:1px solid #dbe4da;display:grid;gap:5px}
+.library-integration-map li strong{font-size:11px;color:#294d37;overflow-wrap:anywhere}
+.library-integration-map li span{font-size:10px;font-weight:700;color:#986045}
+.library-integration-map li small{font-size:11px;line-height:1.65;color:#5b7061}
