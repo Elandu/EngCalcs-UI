@@ -432,6 +432,162 @@ export type Database = {
           },
         ]
       }
+      engineering_sources: {
+        Row: {
+          id: string
+          project_id: string
+          source_kind: string
+          title: string
+          revision_label: string
+          source_reference: string
+          content_sha256: string | null
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          source_kind: string
+          title: string
+          revision_label?: string
+          source_reference: string
+          content_sha256?: string | null
+          created_by?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          source_kind?: string
+          title?: string
+          revision_label?: string
+          source_reference?: string
+          content_sha256?: string | null
+          created_by?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "engineering_sources_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      engineering_input_proposals: {
+        Row: {
+          id: string
+          project_id: string
+          source_id: string
+          target_calculation_id: string | null
+          target_input_path: string
+          proposed_value_json: Json
+          source_location: string
+          rationale: string
+          proposal_origin: string
+          model_identifier: string | null
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          source_id: string
+          target_calculation_id?: string | null
+          target_input_path: string
+          proposed_value_json: Json
+          source_location: string
+          rationale: string
+          proposal_origin?: string
+          model_identifier?: string | null
+          created_by?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          source_id?: string
+          target_calculation_id?: string | null
+          target_input_path?: string
+          proposed_value_json?: Json
+          source_location?: string
+          rationale?: string
+          proposal_origin?: string
+          model_identifier?: string | null
+          created_by?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "engineering_input_proposals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "engineering_input_proposals_source_id_project_id_fkey"
+            columns: ["source_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "engineering_sources"
+            referencedColumns: ["id", "project_id"]
+          },
+          {
+            foreignKeyName: "engineering_input_proposals_target_calculation_id_project_id_fkey"
+            columns: ["target_calculation_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "calculations"
+            referencedColumns: ["id", "project_id"]
+          },
+        ]
+      }
+      engineering_proposal_decisions: {
+        Row: {
+          id: string
+          proposal_id: string
+          project_id: string
+          decision: string
+          review_note: string
+          reviewed_by: string
+          reviewed_at: string
+        }
+        Insert: {
+          id?: string
+          proposal_id: string
+          project_id: string
+          decision: string
+          review_note: string
+          reviewed_by?: string
+          reviewed_at?: string
+        }
+        Update: {
+          id?: string
+          proposal_id?: string
+          project_id?: string
+          decision?: string
+          review_note?: string
+          reviewed_by?: string
+          reviewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "engineering_proposal_decisions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "engineering_proposal_decisions_proposal_id_project_id_fkey"
+            columns: ["proposal_id", "project_id"]
+            isOneToOne: true
+            referencedRelation: "engineering_input_proposals"
+            referencedColumns: ["id", "project_id"]
+          },
+        ]
+      }
       organisation_members: {
         Row: {
           created_at: string
