@@ -23,9 +23,19 @@ export function connectionsForCalculation(
   connections: readonly EngineeringConnection[],
   calculationId: string,
 ): EngineeringConnection[] {
+  // The public calculation library groups the wind plugin under one
+  // synthetic "site_assessment" card; the host only exposes real calculation
+  // definitions. Include those real wind dependencies for that card.
+  const isGroupedWind = calculationId === "au.wind.site_assessment";
   return connections
-    .filter((link) => link.source_calculation_id === calculationId ||
-      link.target_calculation_id === calculationId)
+    .filter((link) =>
+      link.source_calculation_id === calculationId ||
+      link.target_calculation_id === calculationId ||
+      (isGroupedWind && (
+        link.source_calculation_id.startsWith("au.wind.") ||
+        link.target_calculation_id.startsWith("au.wind.")
+      )),
+    )
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
