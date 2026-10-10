@@ -198,7 +198,7 @@ export default function Home() {
             <p className="landing-label">ONE PROJECT / LINKED ENGINEERING WORK</p>
             <h2>A wind calculation should not end as an isolated number.</h2>
             <p>
-              A site's wind conditions inform design actions. Those actions are applied to
+              A site’s wind conditions inform design actions. Those actions are applied to
               a frame. Its results inform later member checks. EngCalcs is built around that
               chain of engineering work, starting with real wind-to-frame functionality.
             </p>
