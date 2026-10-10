@@ -1,443 +1,373 @@
 import Link from "next/link";
 import { Brand } from "@/components/brand";
+import "./landing.css";
 
-const workflowSteps = [
-  ["01", "Bring the project in", "Start with PDF drawing sets, CAD/BIM data, schedules and specifications, then tell EngCalcs what you need designed."],
-  ["02", "AI builds the project model", "EngCalcs extracts geometry, member tags, levels, materials, openings, notes and relationships, then reconciles them across drawings and models."],
-  ["03", "AI plans the design workflow", "The AI identifies design tasks, chooses the required calculation engines, maps dependencies and asks only for missing or uncertain inputs."],
-  ["04", "Deterministic engines run", "Standards-based engines execute the engineering maths. Results do not rely on LLM arithmetic."],
-  ["05", "Revisions propagate", "When architectural or model data changes, EngCalcs identifies affected inputs, marks dependent calculations stale and re-runs the calculation chain for review."],
-  ["06", "Engineer reviews and issues", "Inputs, assumptions, references, formulas, warnings, revisions and provenance remain visible before anything is issued."],
+const problems = [
+  {
+    number: "01",
+    title: "Project data lives in fragments",
+    body: "Geometry sits in drawings. Loads sit in spreadsheets. Member checks sit in separate software. The engineer has to keep those inputs consistent by hand.",
+  },
+  {
+    number: "02",
+    title: "A small revision creates rework",
+    body: "When an opening, roof arrangement or load changes, the engineer must identify every affected calculation, update its inputs and check the downstream consequences.",
+  },
+  {
+    number: "03",
+    title: "The reasoning gets lost",
+    body: "A result alone does not explain where its inputs came from, which engine produced it, or whether it still reflects the latest design.",
+  },
 ];
 
-const sourceTypes = [
-  ["PDF", "Architectural, structural and services drawing sets"],
-  ["DWG / DXF", "CAD geometry, layers, text and dimensions"],
-  ["IFC / BIM", "Objects, properties, levels and model relationships"],
-  ["Revit", "Model data via supported exports and integrations"],
-  ["Tekla", "Structural model data via supported exports and integrations"],
-  ["Specs", "Schedules, specifications and design notes"],
+const implemented = [
+  {
+    label: "AVAILABLE",
+    title: "Wind assessment",
+    scope: "AS/NZS 1170.2",
+    body: "Site wind assessments with staged terrain, shielding and design wind speed inputs. Selected AS 4055 housing calculations are preliminary.",
+  },
+  {
+    label: "AVAILABLE",
+    title: "Frame analysis",
+    scope: "Elastic structural analysis",
+    body: "Model 2D and 3D frames using the PyNite solver, with loads, displacements, reactions and member force diagrams.",
+  },
+  {
+    label: "AVAILABLE · LIMITED SCOPE",
+    title: "Steel and concrete sections",
+    scope: "AS 4100 and section mechanics",
+    body: "Steel axial section capacity checks and reinforced concrete nominal bending calculations. These are not complete member-design or compliance suites.",
+  },
+  {
+    label: "AVAILABLE",
+    title: "Projects and calculation history",
+    scope: "Saved work and linked inputs",
+    body: "Save project calculations and run records, retain engine versions and provenance, and link selected results into downstream calculations.",
+  },
 ];
 
-const calculatorGroups = [
-  ["Wind", "AS/NZS 1170.2", "Regional wind speed, terrain, shielding and design wind speed.", "live"],
-  ["Steel", "AS 4100", "Member and connection design with visible utilisation and workings.", "live"],
-  ["Concrete", "AS 3600", "Member and footing design with transparent assumptions.", "live"],
-  ["Timber", "AS 1720", "Structural timber design with project-preferred sections.", "live"],
-  ["Hydraulic", "AS/NZS 3500", "Standards-based plumbing and drainage calculations linked to project inputs.", "live"],
-  ["Loads", "AS/NZS 1170", "Permanent, imposed and environmental actions linked into the project model.", "planned"],
+const plannedAI = [
+  {
+    number: "01",
+    title: "Read project information",
+    body: "Interpret information from drawing sets, schedules and compatible model exports, retaining the original evidence for engineer review.",
+  },
+  {
+    number: "02",
+    title: "Build a coherent set of inputs",
+    body: "Reconcile information across sources, identify conflicts or missing dimensions, and ask the engineer to confirm assumptions.",
+  },
+  {
+    number: "03",
+    title: "Plan the calculation workflow",
+    body: "Identify which available engines are required, propose the calculation sequence and pass structured inputs between them.",
+  },
+  {
+    number: "04",
+    title: "Identify the effect of revisions",
+    body: "Compare updated project information, flag affected calculations and propose re-runs before engineers approve revised results.",
+  },
 ];
 
-const features = [
-  ["Multimodal project understanding", "AI combines drawing text, geometry, schedules, notes and model objects instead of treating each page or file in isolation."],
-  ["Cross-sheet reasoning", "Architectural, structural and roof information can be reconciled to understand what an element is actually supporting."],
-  ["AI workflow planning", "EngCalcs decomposes the design problem into the calculation chain required to solve it."],
-  ["Deterministic calculation engines", "The AI never invents the final engineering maths. Versioned engines execute the standards-based calculations."],
-  ["Revision-aware design", "Architectural and model revisions are compared against the project model so EngCalcs can identify which calculations are affected and re-run the dependent chain."],
-  ["Connected calculation graph", "Outputs from one calculation become typed inputs to the next, preserving source and dependency information."],
-  ["Transparent review", "Every extracted input, assumption, formula, warning, reference and override remains reviewable."],
+const progress = [
+  {
+    label: "BUILT",
+    title: "Calculation infrastructure",
+    body: "A modular Python runtime with versioned calculation modules, a REST API and an overarching MCP interface for software and AI integrations.",
+  },
+  {
+    label: "BUILT / DEVELOPING",
+    title: "Engineering workspace",
+    body: "A browser-based application for projects, calculation workflows, saved results, review history and selected linked calculation inputs.",
+  },
+  {
+    label: "DEVELOPMENT ROADMAP",
+    title: "AI project intelligence",
+    body: "Automated interpretation of design information, cross-document reconciliation, calculation planning and revision impact detection.",
+  },
+];
+
+const business = [
+  {
+    title: "First customer",
+    body: "Australian structural engineering consultants and small to medium design practices that repeatedly prepare, check and revise engineering calculations.",
+  },
+  {
+    title: "Commercial model",
+    body: "A subscription-based engineering workspace, with team workflows and usage-based API or integration offerings as the platform develops.",
+  },
+  {
+    title: "Expansion path",
+    body: "Start with the structural calculation workflow, then extend the same project model and modular engine architecture to additional engineering disciplines.",
+  },
 ];
 
 export default function Home() {
   return (
-    <main>
-      <header className="site-header">
-        <div className="container nav-wrap">
+    <main className="landing-page">
+      <header className="landing-header">
+        <div className="landing-container landing-header-inner">
           <Brand />
-          <nav className="nav-links" aria-label="Primary navigation">
-            <a href="#workflow">AI workflow</a>
-            <a href="#drawings">Drawings & models</a>
-            <a href="#platform">Platform</a>
-            <a href="#calculators">Engines</a>
+          <nav className="landing-nav" aria-label="Primary navigation">
+            <a href="#problem">The problem</a>
+            <a href="#product">The product</a>
+            <a href="#ai">How AI fits</a>
+            <a href="#company">The business</a>
           </nav>
-          <div className="nav-actions">
-            <Link className="nav-login" href="/login">Log in</Link>
-            <Link className="button button-small button-primary" href="/signup">Join early access</Link>
+          <div className="landing-header-actions">
+            <Link className="landing-signin" href="/login">Log in</Link>
+            <Link className="landing-button landing-header-button" href="/signup">Open EngCalcs <span aria-hidden="true">↗</span></Link>
           </div>
         </div>
       </header>
 
-      <section className="hero">
-        <div className="container hero-grid">
-          <div className="hero-copy">
-            <div className="hero-kicker">
-              <span>AI-native engineering workspace</span>
-              <span className="kicker-dot" />
-              Built for Australian practice
-            </div>
-            <h1>Bring the project. <em>EngCalcs understands, calculates and keeps it current.</em></h1>
-            <p className="hero-lead">
-              EngCalcs interprets drawings, CAD/BIM data and engineering intent, turns them into a
-              structured project model, then plans and runs the calculation chain. When the design
-              changes, EngCalcs traces the impact and re-runs affected calculations for engineer review.
+      <section className="landing-hero" aria-labelledby="landing-heading">
+        <div className="landing-container landing-hero-grid">
+          <div>
+            <p className="landing-label">ENGINEERING CALCULATION SOFTWARE · AUSTRALIA</p>
+            <h1 id="landing-heading">Engineering calculations, <em>connected to the project.</em></h1>
+            <p className="landing-lead">
+              EngCalcs is building a single workspace for the calculations behind an engineering design.
+              It connects project inputs, calculation engines and review history, so engineers spend less
+              time transferring data between tools and checking what changed.
             </p>
-            <div className="hero-actions">
-              <Link className="button button-primary" href="/signup">Create a workspace <span aria-hidden="true">→</span></Link>
-              <a className="button button-secondary" href="#workflow">See the AI workflow</a>
+            <div className="landing-hero-actions">
+              <Link className="landing-button" href="/signup">Explore the workspace <span aria-hidden="true">↗</span></Link>
+              <a className="landing-button landing-button-outline" href="#product">See what is built <span aria-hidden="true">↓</span></a>
             </div>
-            <div className="hero-proof">
-              <span><b>AI understands</b> drawings & models</span>
-              <span><b>AI plans</b> the workflow</span>
-              <span><b>Changes propagate</b> through the design</span>
-            </div>
+            <p className="landing-stage">
+              Early-stage platform with working engineering calculation modules.
+              AI-assisted drawing interpretation and automatic design coordination are in development.
+            </p>
           </div>
 
-          <div className="product-window" aria-label="EngCalcs drawing-to-calculation workflow preview">
-            <div className="window-bar">
-              <span /><span /><span />
-              <div className="window-address">EngCalcs / Project intelligence</div>
+          <div className="landing-window" aria-label="Illustrative example of a connected engineering calculation workflow">
+            <div className="landing-window-header">
+              <span>ENGCALCS / PROJECT WORKFLOW</span>
+              <span>ILLUSTRATIVE</span>
             </div>
-            <div className="app-preview">
-              <aside className="preview-sidebar">
-                <div className="mini-logo">EC</div>
-                <div className="side-block active"><i />Project AI</div>
-                <div className="side-block"><i />Drawings</div>
-                <div className="side-block"><i />Model</div>
-                <div className="side-block"><i />Calculations</div>
-                <div className="side-divider" />
-                <div className="project-node"><span />A203.pdf</div>
-                <div className="project-node"><span />S104.dwg</div>
-                <div className="project-node"><span />Structure.ifc</div>
-                <div className="project-node child selected"><span />Beam B1</div>
-              </aside>
+            <div className="landing-window-body">
+              <div className="landing-workflow-head">
+                <div>
+                  <span className="landing-label">PROJECT / EXAMPLE</span>
+                  <h2>Residential extension</h2>
+                </div>
+                <span className="landing-workflow-status">Engineered workflow</span>
+              </div>
+              <div className="landing-flow">
+                <div className="landing-flow-box">
+                  <span className="landing-label">PROJECT INPUT</span>
+                  <h3>Wind exposure and design actions</h3>
+                  <div className="landing-flow-meta"><span>Site inputs</span><span>AS/NZS 1170.2</span></div>
+                </div>
+                <div className="landing-flow-connector"><span>structured inputs</span></div>
+                <div className="landing-flow-box landing-flow-box-main">
+                  <span className="landing-label">ENGINEERING ANALYSIS</span>
+                  <h3>Frame forces and reactions</h3>
+                  <p>Elastic frame solver with saved inputs and results.</p>
+                </div>
+                <div className="landing-flow-connector"><span>design actions</span></div>
+                <div className="landing-flow-box">
+                  <span className="landing-label">SECTION CHECKS</span>
+                  <h3>Steel / concrete section tools</h3>
+                  <p>Defined calculation scope, reviewable assumptions and engine provenance.</p>
+                </div>
+              </div>
+              <div className="landing-window-foot">
+                <span>Versioned engines · saved calculation runs</span>
+                <span>Engineer reviewed</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-              <div className="preview-main">
-                <div className="preview-topline">
+      <div className="landing-evidence" aria-label="EngCalcs design principles">
+        <div className="landing-container landing-evidence-grid">
+          <div className="landing-evidence-item">
+            <span className="landing-label">ENGINEERING FIRST</span>
+            <strong>Deterministic calculations</strong>
+            <p>Code runs the mathematics, not a language model.</p>
+          </div>
+          <div className="landing-evidence-item">
+            <span className="landing-label">DESIGNED FOR PRACTICE</span>
+            <strong>Australian standards</strong>
+            <p>Starting with structural engineering workflows.</p>
+          </div>
+          <div className="landing-evidence-item">
+            <span className="landing-label">REVIEWABLE BY DESIGN</span>
+            <strong>Inputs, versions and provenance</strong>
+            <p>Engineers stay accountable for the design.</p>
+          </div>
+        </div>
+      </div>
+
+      <section className="landing-section" id="problem">
+        <div className="landing-container">
+          <div className="landing-section-head">
+            <p className="landing-label">THE PROBLEM</p>
+            <h2>Engineering software calculates well. The work between calculations is still manual.</h2>
+            <p>
+              A structural design is not one calculation. It is a chain of decisions and inputs shared
+              across drawings, standards, models, spreadsheets and specialised tools. Keeping that chain
+              consistent takes time, and design revisions make the problem worse.
+            </p>
+          </div>
+          <div className="landing-problems">
+            {problems.map((item) => (
+              <article className="landing-problem" key={item.number}>
+                <span className="landing-label">{item.number} / WORKFLOW FRICTION</span>
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-section landing-section-muted" id="product">
+        <div className="landing-container">
+          <div className="landing-section-head">
+            <p className="landing-label">THE PRODUCT / CURRENT CAPABILITIES</p>
+            <h2>Start with useful engineering tools. Connect them as the project grows.</h2>
+            <p>
+              EngCalcs already includes a calculation runtime and browser workspace. The starting point
+              is a practical set of structural engineering tools with saved work, reviewable inputs and
+              selectively linked results. The scope of each engine is stated rather than implied.
+            </p>
+          </div>
+          <div className="landing-available-grid">
+            {implemented.map((item) => (
+              <article className="landing-capability" key={item.title}>
+                <span className="landing-label">{item.label}</span>
+                <h3>{item.title}</h3>
+                <strong className="landing-scope">{item.scope}</strong>
+                <p>{item.body}</p>
+              </article>
+            ))}
+          </div>
+          <p className="landing-section-caption">
+            Availability refers to implementation in the product code, not independent certification,
+            complete standard coverage or autonomous design approval.
+          </p>
+        </div>
+      </section>
+
+      <section className="landing-section landing-section-dark" id="ai">
+        <div className="landing-container">
+          <div className="landing-section-head">
+            <p className="landing-label landing-label-light">WHERE ARTIFICIAL INTELLIGENCE FITS</p>
+            <h2>Use AI to understand the project. Use engineering code to calculate it.</h2>
+            <p>
+              The real opportunity for AI is organising the information around a calculation:
+              reading design documents, identifying relevant data, finding missing assumptions and
+              coordinating the next calculation. This is the AI layer we are developing.
+            </p>
+          </div>
+          <div className="landing-ai-grid">
+            <div className="landing-ai-list">
+              {plannedAI.map((item) => (
+                <article className="landing-ai-item" key={item.number}>
+                  <span>{item.number}</span>
                   <div>
-                    <small>AI PROJECT MODEL</small>
-                    <strong>Beam B1 · rear opening</strong>
+                    <h3>{item.title}</h3>
+                    <p>{item.body}</p>
                   </div>
-                  <button>Review source</button>
-                </div>
-
-                <div className="drawing-preview-grid">
-                  <section className="drawing-sheet">
-                    <div className="sheet-toolbar">
-                      <span>A203 · Ground floor</span>
-                      <b>ARCH</b>
-                    </div>
-                    <div className="plan-sketch" aria-hidden="true">
-                      <span className="plan-wall wall-a" />
-                      <span className="plan-wall wall-b" />
-                      <span className="plan-wall wall-c" />
-                      <span className="plan-opening">4200</span>
-                      <span className="plan-member">B1</span>
-                      <span className="plan-note">rear opening</span>
-                    </div>
-                  </section>
-
-                  <section className="model-facts">
-                    <div className="result-status">AI EXTRACTED</div>
-                    <small>Structured design facts</small>
-                    <div className="model-fact-row"><span>Span</span><b>4.20 m</b></div>
-                    <div className="model-fact-row"><span>Upper wall</span><b>Brick veneer</b></div>
-                    <div className="model-fact-row"><span>Roof</span><b>Tiled · 22.5°</b></div>
-                    <div className="model-fact-row"><span>Tributary width</span><b>3.1 m</b></div>
-                    <div className="model-fact-row"><span>Confidence</span><b>Review 1 item</b></div>
-                  </section>
-                </div>
-
-                <div className="audit-line">
-                  <span className="audit-dot" />
-                  Sources reconciled across architectural, structural and model data · revision-aware
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="trust-strip">
-        <div className="container trust-row">
-          <span>Designed around the standards Australian engineers use</span>
-          <b>AS/NZS 1170.2</b><b>AS 4100</b><b>AS 3600</b><b>AS 1720</b><b>AS/NZS 3500</b>
-        </div>
-      </section>
-
-      <section className="section" id="workflow">
-        <div className="container">
-          <div className="section-heading">
-            <p className="eyebrow">From project information to engineering output</p>
-            <h2>Understand the design. Calculate it. Keep it current when the design changes.</h2>
-            <p>
-              EngCalcs uses AI to interpret project information, reconcile it into a structured
-              engineering model and decide what needs to be designed. When source geometry or
-              specifications change, the dependency graph shows what is affected and the relevant
-              calculation chain can be re-run. The maths remains deterministic, versioned and reviewable.
-            </p>
-          </div>
-
-          <div className="pipeline-diagram" aria-label="EngCalcs workflow">
-            <div className="pipeline-stage source-stage">
-              <small>INPUT</small>
-              <strong>Drawings & models</strong>
-              <span>PDF · DWG · IFC · BIM · specs</span>
-            </div>
-            <div className="pipeline-arrow"><span>AI interprets</span></div>
-            <div className="pipeline-stage ai-stage">
-              <small>UNDERSTAND</small>
-              <strong>Project model</strong>
-              <span>geometry · elements · loads · relationships</span>
-            </div>
-            <div className="pipeline-arrow"><span>AI plans</span></div>
-            <div className="pipeline-stage ai-stage">
-              <small>PLAN</small>
-              <strong>Design tasks</strong>
-              <span>beam · column · footing · wind · bracing</span>
-            </div>
-            <div className="pipeline-arrow"><span>code executes</span></div>
-            <div className="pipeline-stage calc-stage">
-              <small>CALCULATE</small>
-              <strong>Deterministic engines</strong>
-              <span>standards-based · versioned · traceable</span>
-            </div>
-            <div className="pipeline-arrow"><span>engineer reviews</span></div>
-            <div className="pipeline-stage output-stage">
-              <small>OUTPUT</small>
-              <strong>Calculation pack</strong>
-              <span>workings · references · assumptions · provenance</span>
-            </div>
-          </div>
-
-          <div className="revision-loop" aria-label="Revision-aware calculation loop">
-            <div className="revision-source">
-              <small>ARCHITECTURAL REVISION</small>
-              <strong>A203 Rev C</strong>
-              <span>Rear opening: 4200 → 4500 mm</span>
-            </div>
-            <div className="revision-arrow">→</div>
-            <div className="revision-impact">
-              <small>AI IMPACT ANALYSIS</small>
-              <strong>3 calculations affected</strong>
-              <span>Beam B1 · Column C1 · Footing F1</span>
-            </div>
-            <div className="revision-arrow">→</div>
-            <div className="revision-rerun">
-              <small>RE-CALCULATE</small>
-              <strong>Dependent chain re-run</strong>
-              <span>New results held for engineer review</span>
-            </div>
-            <div className="revision-loopback">↺ source → model → calculations → review</div>
-          </div>
-
-          <div className="workflow-step-grid">
-            {workflowSteps.map(([number, title, text]) => (
-              <article className="workflow-step-card" key={title}>
-                <div className="feature-number">{number}</div>
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="section section-soft" id="drawings">
-        <div className="container">
-          <div className="section-heading split-heading">
-            <div>
-              <p className="eyebrow">Drawings, CAD and BIM</p>
-              <h2>The project model should not care where the geometry came from.</h2>
-            </div>
-            <p>
-              EngCalcs is designed around a common internal engineering model. PDF drawings can be
-              interpreted visually and geometrically, while CAD/BIM sources can contribute richer
-              object, property and relationship data.
-            </p>
-          </div>
-
-          <div className="source-grid">
-            {sourceTypes.map(([title, text]) => (
-              <article className="source-card" key={title}>
-                <strong>{title}</strong>
-                <p>{text}</p>
-              </article>
-            ))}
-          </div>
-
-          <div className="cross-sheet-card">
-            <div className="cross-sheet-copy">
-              <p className="eyebrow">Cross-source reasoning</p>
-              <h3>A beam is more than a line on one drawing.</h3>
-              <p>
-                EngCalcs can combine information from several project sources before deciding what a
-                structural element actually supports.
-              </p>
-            </div>
-
-            <div className="cross-sheet-flow">
-              <div className="source-evidence">
-                <small>ARCHITECTURAL</small>
-                <b>A203</b>
-                <span>4.2 m rear opening</span>
-              </div>
-              <div className="source-evidence">
-                <small>STRUCTURAL</small>
-                <b>S104</b>
-                <span>Beam B1 over opening</span>
-              </div>
-              <div className="source-evidence">
-                <small>ROOF / BIM</small>
-                <b>Model</b>
-                <span>Trusses span to B1</span>
-              </div>
-              <div className="cross-sheet-merge">+</div>
-              <div className="inference-card">
-                <small>AI INFERENCE</small>
-                <b>Beam B1 design task</b>
-                <span>Roof actions + upper wall load + self-weight</span>
-                <em>Confirm masonry bearing condition before run</em>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="section workflow-section" id="platform">
-        <div className="container workflow-grid">
-          <div className="section-heading left-heading">
-            <p className="eyebrow">The calculation graph</p>
-            <h2>The model and calculations stay connected.</h2>
-            <p>
-              Once EngCalcs understands the project, the design becomes a graph of sources, extracted
-              facts, assumptions, calculations and downstream dependencies.
-            </p>
-            <ul className="check-list">
-              <li>Every extracted value can retain its drawing/model source</li>
-              <li>AI identifies the calculation modules required for each design task</li>
-              <li>Outputs become typed inputs to downstream calculations</li>
-              <li>Architectural and model revisions identify affected calculations automatically</li>
-              <li>Dependent calculations can be re-run against the revised design</li>
-            </ul>
-          </div>
-
-          <div className="flow-card">
-            <div className="flow-node"><small>PROJECT SOURCE</small><b>Beam B1 geometry</b><span>A203 + S104 + model</span></div>
-            <div className="flow-line"><span>interpreted by AI</span></div>
-            <div className="flow-node accent"><small>AI PLANNER</small><b>B1 design workflow</b><span>5 linked checks</span></div>
-            <div className="flow-line"><span>requires</span></div>
-            <div className="flow-node"><small>WIND / LOADS</small><b>Design actions</b><span>AS/NZS 1170</span></div>
-            <div className="flow-line"><span>feeds</span></div>
-            <div className="flow-node"><small>STEEL</small><b>Beam B1</b><span>AS 4100 member checks</span></div>
-            <div className="flow-line"><span>reactions</span></div>
-            <div className="flow-node"><small>DOWNSTREAM</small><b>Column / footing</b><span>Linked for further design</span></div>
-          </div>
-        </div>
-      </section>
-
-      <section className="section">
-        <div className="container">
-          <div className="section-heading">
-            <p className="eyebrow">Why AI belongs here</p>
-            <h2>AI handles interpretation and coordination. Code handles engineering maths.</h2>
-            <p>
-              The useful AI work happens before and around the calculation: understanding project
-              information, reconciling sources, identifying missing data, decomposing the design and
-              coordinating linked calculations.
-            </p>
-          </div>
-
-          <div className="feature-grid">
-            {features.map(([title, text], index) => (
-              <article className="feature-card" key={title}>
-                <div className="feature-number">0{index + 1}</div>
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="section section-soft" id="calculators">
-        <div className="container">
-          <div className="section-heading split-heading">
-            <div>
-              <p className="eyebrow">Deterministic calculation engines</p>
-              <h2>The AI does not get to make up the maths.</h2>
-            </div>
-            <p>
-              Each calculation engine is versioned, standards-referenced and independently reviewable.
-              EngCalcs orchestrates them as one workflow while preserving the workings. Wind,
-              steel, concrete, timber and hydraulic calculation engines are already available.
-            </p>
-          </div>
-
-          <div className="calculator-grid">
-            {calculatorGroups.map(([title, standard, description, status], index) => {
-              const isAvailable = status === "live";
-              const isWind = title === "Wind";
-              return (
-                <article className={`calculator-card ${isAvailable ? "live" : "planned"}`} key={title}>
-                  <div className="calculator-top">
-                    <span>{isAvailable ? "AVAILABLE" : "PLANNED"}</span>
-                    <b>0{index + 1}</b>
-                  </div>
-                  <h3>{title}</h3>
-                  <small>{standard}</small>
-                  <p>{description}</p>
-                  {isWind ? (
-                    <Link className="button button-light button-small" href="/dashboard/calculations?q=wind">
-                      Open wind calculations <span aria-hidden="true">→</span>
-                    </Link>
-                  ) : null}
                 </article>
-              );
-            })}
+              ))}
+            </div>
+            <aside className="landing-boundary">
+              <p className="landing-label">THE TRUST BOUNDARY</p>
+              <h3>AI can propose a workflow. It cannot sign off an engineering result.</h3>
+              <p>
+                EngCalcs separates AI interpretation from numerical execution. Engineering calculations
+                are performed by explicit, versioned calculation engines. Engineers must be able to
+                inspect and correct inputs, assumptions and outputs before using the results.
+              </p>
+              <strong>AI-assisted coordination is planned; the deterministic calculation foundation is already being built and used.</strong>
+            </aside>
           </div>
         </div>
       </section>
 
-      <section className="section team-section">
-        <div className="container team-grid">
-          <div>
-            <p className="eyebrow">For engineering teams</p>
-            <h2>AI assistance without giving up reviewability.</h2>
-          </div>
-          <div className="team-copy">
+      <section className="landing-section" id="roadmap">
+        <div className="landing-container">
+          <div className="landing-section-head">
+            <p className="landing-label">BUILD PROGRESS</p>
+            <h2>There is a working engineering foundation behind the ambition.</h2>
             <p>
-              Engineers remain responsible for the design. EngCalcs gives teams a consistent way to
-              understand project information, plan, calculate, review and issue work while keeping
-              assumptions, overrides and provenance visible.
+              EngCalcs is being developed in stages. We distinguish software that exists today from
+              the automated design workflow the platform is working towards.
             </p>
-            <div className="team-points">
-              <span>Drawing & model intelligence</span><span>Revision impact analysis</span>
-              <span>Roles & review states</span><span>Reusable project defaults</span>
-              <span>Calculation history</span><span>API access</span>
+          </div>
+          <div className="landing-roadmap-grid">
+            {progress.map((item) => (
+              <article className="landing-roadmap" key={item.title}>
+                <span className="landing-label">{item.label}</span>
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-section landing-section-muted" id="company">
+        <div className="landing-container">
+          <div className="landing-business-head">
+            <div className="landing-business-heading">
+              <p className="landing-label">THE COMMERCIAL OPPORTUNITY</p>
+              <h2>Built for practising engineers, not for replacing them.</h2>
+            </div>
+            <p>
+              EngCalcs begins with a repeatable problem in Australian structural consulting:
+              preparing, revising and documenting calculations. The long-term product is a commercial
+              engineering workspace with calculation services accessible to teams and other software.
+            </p>
+          </div>
+          <div className="landing-business-grid">
+            {business.map((item) => (
+              <article key={item.title}>
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-cta">
+        <div className="landing-container landing-cta-inner">
+          <div>
+            <p className="landing-label">ENGCALCS · EARLY STAGE</p>
+            <h2>Less time reconciling calculations. More time engineering.</h2>
+            <p>
+              Explore the current workspace and calculation tools, or learn how the platform will
+              connect engineering design information with AI-assisted workflows.
+            </p>
+          </div>
+          <div className="landing-cta-actions">
+            <Link className="landing-button" href="/signup">Create a workspace <span aria-hidden="true">↗</span></Link>
+            <a className="landing-button landing-button-outline" href="#ai">Explore the AI approach <span aria-hidden="true">↑</span></a>
+          </div>
+        </div>
+      </section>
+
+      <footer className="landing-footer">
+        <div className="landing-container">
+          <div className="landing-footer-inner">
+            <Brand />
+            <p>EngCalcs is a commercial engineering software platform built around transparent,
+              reproducible calculation workflows. All engineering outputs require professional review.</p>
+            <div className="landing-footer-links">
+              <a href="#problem">Problem</a>
+              <a href="#product">Product</a>
+              <a href="#ai">AI</a>
+              <Link href="/login">Log in</Link>
             </div>
           </div>
-        </div>
-      </section>
-
-      <section className="cta-section">
-        <div className="container cta-card">
-          <div>
-            <p className="eyebrow">EngCalcs early access</p>
-            <h2>From project model to calculations that stay aligned with the design.</h2>
-            <p>
-              Bring the project information. EngCalcs interprets the design, plans the engineering
-              workflow, runs deterministic calculation engines and traces design revisions through
-              dependent calculations with the workings left visible.
-            </p>
-          </div>
-          <div className="cta-actions">
-            <Link className="button button-light" href="/signup">Create a workspace</Link>
-            <a className="text-link" href="#workflow">See how it works →</a>
-          </div>
-        </div>
-      </section>
-
-      <footer className="site-footer">
-        <div className="container footer-grid">
-          <Brand />
-          <p>AI-orchestrated engineering calculations, deterministically verified.</p>
-          <div>
-            <a href="#workflow">AI workflow</a>
-            <a href="#drawings">Drawings & models</a>
-            <a href="#calculators">Engines</a>
-            <a href="https://github.com/Elandu/OpenCalcs-UI" target="_blank" rel="noreferrer">GitHub ↗</a>
-          </div>
-          <small>© 2026 EngCalcs</small>
+          <div className="landing-legal">© 2026 EngCalcs. All rights reserved.</div>
         </div>
       </footer>
     </main>
