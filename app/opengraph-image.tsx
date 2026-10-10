@@ -14,10 +14,12 @@ export default function OpenGraphImage() {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 19 }}>
-        <svg width="65" height="65" viewBox="0 0 48 48">
-          <rect width="48" height="48" rx="5" fill="#19382f" />
-          <path d="M35 10H23L12 20V28L23 38H35" fill="none" stroke="#f6f4ed" strokeWidth="4" />
-          <path d="M30 16H21V32H30M21 24H29" fill="none" stroke="#d5ac71" strokeWidth="3" />
+        <svg width="65" height="65" viewBox="0 0 64 64">
+          <rect width="64" height="64" rx="9" fill="#19382F" />
+          <g transform="translate(7 7) scale(.78)" fill="none" strokeLinejoin="bevel" strokeLinecap="square">
+            <path d="M44.8 10.5H26.4L10.0 23.0V40.9L26.7 53.3H45.8" stroke="#F6F4ED" strokeWidth="7.3" />
+            <path d="M42.3 23.1H32.0L23.1 29.4V35.4L32.0 42.0H42.3" stroke="#D5AC71" strokeWidth="6.3" />
+          </g>
         </svg>
         <span style={{ fontSize: 34, fontWeight: 700, letterSpacing: -1.5 }}>EngCalcs</span>
       </div>
@@ -26,10 +28,10 @@ export default function OpenGraphImage() {
           ENGINEERING SOFTWARE / AUSTRALIA
         </span>
         <span style={{ marginTop: 18, fontSize: 72, fontWeight: 700, lineHeight: 1.06, letterSpacing: -3 }}>
-          Engineering calculations,
+          When the design changes,
         </span>
         <span style={{ marginTop: 3, fontSize: 72, fontWeight: 700, lineHeight: 1.06, letterSpacing: -3, color: "#3f775a" }}>
-          connected to the project.
+          know what needs checking.
         </span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: "auto", paddingTop: 26, borderTop: "2px solid #cad6cb", alignItems: "center" }}>
