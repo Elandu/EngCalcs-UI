@@ -2,7 +2,7 @@
 
 ## Positioning
 
-**Brand statement:** Engineering calculations in context.
+**Brand statement:** When the design changes, know what needs checking.
 
 **Product statement:** EngCalcs brings engineering inputs, deterministic calculation modules, linked work and review history into one workspace. An AI coordination layer is in development to interpret project information and manage calculation dependencies.
 
@@ -12,9 +12,11 @@
 
 ## Brand assets
 
-- `/public/brand/engcalcs-mark.svg`: primary vector mark, dark evergreen background with paper-white and brass pathways.
+- `/public/brand/engcalcs-mark.svg`: primary unboxed symbol, evergreen structural path and nested brass calculation path.
 - `/public/brand/engcalcs-mark-mono.svg`: monochrome reproduction when full colour is unavailable.
-- `/app/icon.svg`: favicon and app icon, using identical mark geometry.
+- `/public/brand/engcalcs-lockup.svg`: horizontal logo.
+- `/public/brand/engcalcs-icon.svg`: app/social avatar symbol.
+- `/app/icon.svg`: favicon using the dark-tile symbol geometry.
 - `/components/brand.tsx`: shared on-page brand lockup; preserve the geometry and proportions rather than building a separate mark in individual screens.
 - `/app/opengraph-image.tsx`: server-rendered 1200×630 PNG for link sharing.
 
@@ -53,7 +55,7 @@ Use real engineering content for product illustrations. The landing hero is gene
 - The customer-facing home page explains the problem, available capabilities and AI roadmap.
 - `/company` holds the startup and business-model explanation, without inventing metrics.
 - Use the shared Open Graph image and favicon; avoid duplicate Next.js/Vercel templates or metadata.
-- No public "open-source" positioning. Repository visibility and historic software licensing are separate legal/distribution decisions, not controlled by this brand guide.
+- No public "open-source" product positioning. Historic AGPL grants cannot be revoked; see `docs/licensing-transition.md` for the documented transition state.
 
 ## Documents and PDF export direction
 

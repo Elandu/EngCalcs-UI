@@ -4,7 +4,7 @@ import "./calculation-links.css";
 import "./brand-system.css";
 
 export const metadata: Metadata = {
-  title: "EngCalcs | Engineering calculations in context",
+  title: "EngCalcs | When the design changes, know what needs checking",
   description:
     "EngCalcs connects Australian wind and structural calculations with project inputs and run history. Engineering-led software with AI coordination in development.",
   applicationName: "EngCalcs",

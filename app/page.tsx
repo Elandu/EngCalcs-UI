@@ -128,12 +128,12 @@ export default function Home() {
         <div className="landing-container landing-hero-grid">
           <div>
             <p className="landing-label">ENGINEERING SOFTWARE · BUILT FOR AUSTRALIAN STRUCTURAL PRACTICE</p>
-            <h1 id="landing-heading">Engineering calculations, <em>without the disconnected work.</em></h1>
+            <h1 id="landing-heading">When the design changes, <em>know what needs checking.</em></h1>
             <p className="landing-lead">
-              EngCalcs brings engineering inputs, calculations and their history into one project
-              workspace. Start with real Australian wind and structural-analysis tools. We are
-              building the AI layer that will help engineers turn project documents and design
-              changes into reviewable calculation workflows.
+              EngCalcs brings project inputs, deterministic engineering calculations and review history
+              into one workspace. Work today with Australian wind and structural-analysis tools.
+              We are developing AI-assisted drawing interpretation and change coordination so
+              engineers can identify which design checks need attention after a revision.
             </p>
             <div className="landing-hero-actions">
               <Link className="landing-button" href="/signup">Explore the workspace <span aria-hidden="true">↗</span></Link>
