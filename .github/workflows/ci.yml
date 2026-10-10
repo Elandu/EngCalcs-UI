@@ -47,7 +47,8 @@ jobs:
             supabase/functions/opencalcs-run-calculation-v3/index.ts \
             supabase/functions/opencalcs-run-wind-workflow/index.ts \
             supabase/functions/opencalcs-review-wind-workflow/index.ts \
-            supabase/functions/opencalcs-issue-wind-workflow/index.ts; do
+            supabase/functions/opencalcs-issue-wind-workflow/index.ts \
+            supabase/functions/engcalcs-verify-source-upload/index.ts; do
             deno check --no-config --node-modules-dir=none "$entrypoint"
           done
 
