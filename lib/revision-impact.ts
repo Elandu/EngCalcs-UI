@@ -224,7 +224,7 @@ export function assessRevisionImpact(
 
     for (const link of outgoing.get(node.id) ?? []) {
       const newVia = [...current.via, link.target_calculation_id];
-      if (newVia.includes(root.id) || current.via.includes(link.target_calculation_id)) {
+      if (link.target_calculation_id === root.id || current.via.includes(link.target_calculation_id)) {
         warnings.push("Dependency cycle detected; review the calculation links manually.");
       } else if (!visited.has(link.target_calculation_id)) {
         queue.push({ node: link.target_calculation_id, depth: current.depth + 1, via: newVia, link });
