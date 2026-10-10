@@ -53,7 +53,7 @@ export function WorkspaceOnboarding({ userId }: { userId: string }) {
 
   return (
     <section className="dashboard-empty onboarding-card">
-      <p className="eyebrow">Set up OpenCalcs</p>
+      <p className="eyebrow">Set up EngCalcs</p>
       <h1>Create your engineering workspace.</h1>
       <p>
         A workspace owns projects, calculations, reports and team access. You can invite
