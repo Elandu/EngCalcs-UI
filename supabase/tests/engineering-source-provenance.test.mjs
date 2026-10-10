@@ -7,6 +7,7 @@ const migration = await readFile(
   new URL("../migrations/20261010113000_engineering_source_provenance.sql", import.meta.url),
   "utf8",
 );
+const indexMigration = await readFile(new URL("../migrations/20261010130000_engineering_provenance_indexes.sql", import.meta.url), "utf8");
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 test("source evidence is tenant-scoped, proposals are manually proposed and immutable, reviewer decisions are append-only", async () => {
@@ -53,6 +54,26 @@ test("source evidence is tenant-scoped, proposals are manually proposed and immu
         ('${id(12)}','${id(9)}','draft');
     `);
     await db.exec(migration);
+    await db.exec(indexMigration);
+    const indexes = await db.query(`
+      select indexname from pg_indexes where schemaname='public'
+        and indexname like 'engineering_%_idx'
+    `);
+    const allIndexes = await db.query(`
+      select indexname from pg_indexes where schemaname='public'
+        and indexname like 'engineering_%'
+    `);
+    for (const expected of [
+      'engineering_sources_created_by_idx',
+      'engineering_input_proposals_created_by_idx',
+      'engineering_input_proposals_source_scope_idx',
+      'engineering_input_proposals_target_scope_idx',
+      'engineering_proposal_decisions_proposal_scope_idx',
+      'engineering_proposal_decisions_reviewer_idx',
+    ]) {
+      assert.ok(allIndexes.rows.some((row) => row.indexname === expected), expected);
+    }
+    assert.ok(indexes.rows.length >= 2);
 
     const rights = (await db.query(`
       select has_table_privilege('authenticated','public.calculations','INSERT') as can_insert_calc,
