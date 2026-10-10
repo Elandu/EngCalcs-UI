@@ -4,14 +4,14 @@ import "./calculation-links.css";
 import "./brand-system.css";
 
 export const metadata: Metadata = {
-  title: "EngCalcs | Connected engineering calculations",
+  title: "EngCalcs | Engineering calculations in context",
   description:
-    "EngCalcs connects engineering calculations, project inputs and review history in one workspace. Built for Australian structural engineers, with AI-assisted design coordination in development.",
+    "EngCalcs connects Australian wind and structural calculations with project inputs and run history. Engineering-led software with AI coordination in development.",
   applicationName: "EngCalcs",
   metadataBase: new URL("https://engcalcs.au"),
   openGraph: {
     title: "EngCalcs | Engineering calculations in context",
-    description: "Connected, reviewable engineering calculation software for Australian practice.",
+    description: "The calculation, its inputs and its history, together in one engineering workspace. AI project coordination in development.",
     url: "https://engcalcs.au",
     siteName: "EngCalcs",
     type: "website",
@@ -20,8 +20,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "EngCalcs | Connected engineering calculations",
-    description: "Deterministic calculations. Reviewable results. AI coordination in development.",
+    title: "EngCalcs | Engineering calculations in context",
+    description: "Connected structural calculations and reviewable run history. AI-assisted project coordination in development.",
     images: ["/opengraph-image"],
   },
   icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }] },
