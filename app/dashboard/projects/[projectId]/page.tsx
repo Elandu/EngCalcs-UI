@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { CalculationLauncher } from "@/components/calculation-launcher";
+import { RevisionImpactReview } from "@/components/revision-impact-review";
 import { WindSiteWorkflow } from "@/components/wind-site-workflow";
 import { WindCalculationWorkspace } from "@/components/wind-calculation-workspace";
 import { WindWorkflowReview } from "@/components/wind-workflow-review";
@@ -19,6 +20,7 @@ import {
   WIND_ASSESSMENT_ID,
 } from "@/lib/calculation-catalogue";
 import { revisionStatuses, type RevisionRun } from "@/lib/calculation-revisions";
+import type { ImpactRun } from "@/lib/revision-impact";
 import { calculationStatus } from "@/lib/calculation-status";
 
 export const dynamic = "force-dynamic";
@@ -134,11 +136,11 @@ export default async function ProjectPage({
 
   const calculationRows = calculations ?? [];
   const calculationIds = calculationRows.map((calculation) => calculation.id);
-  const revisionRuns: RevisionRun[] = [];
+  const revisionRuns: Array<RevisionRun & ImpactRun> = [];
   if (calculationIds.length) {
     for (let offset = 0; ; offset += 500) {
       const { data, error } = await supabase.from("calculation_runs")
-        .select("id, calculation_id, run_sequence, provenance_json")
+        .select("id, calculation_id, run_sequence, provenance_json, result_json, created_at")
         .in("calculation_id", calculationIds).order("id").range(offset, offset + 499);
       if (error) throw new Error(`Unable to load revision state: ${error.message}`);
       revisionRuns.push(...(data ?? []));
@@ -662,6 +664,18 @@ export default async function ProjectPage({
             </div>
           </section>
         ) : null}
+
+        <RevisionImpactReview
+          projectId={project.id}
+          calculations={calculationRows.map((calculation) => ({
+            id: calculation.id,
+            title: calculation.title,
+            calculation_definition_id: calculation.calculation_definition_id,
+            state: calculation.state,
+          }))}
+          runs={revisionRuns}
+          links={links ?? []}
+        />
 
         <div className="project-list-card">
           <div className="project-list-header">
