@@ -20,11 +20,20 @@ export async function GET(request: Request, context: { params: Promise<{ project
   }
   const offset = Number(rawOffset);
   const { data, error, count } = await auth.client.from("engineering_sources")
-    .select("id, source_kind, title, revision_label, source_reference, content_sha256, created_by, created_at", { count: "exact" })
+    .select("id, source_kind, title, revision_label, source_reference, content_sha256, storage_path, storage_byte_size, storage_mime_type, created_by, created_at", { count: "exact" })
     .eq("project_id", projectId).order("created_at", { ascending: false })
     .order("id", { ascending: false }).range(offset, offset + PAGE_SIZE - 1);
   if (error) return reply({ error: "Unable to load project sources." }, 500);
-  return reply({ projectId, sources: data ?? [], total: count ?? 0, offset, limit: PAGE_SIZE });
+  return reply({
+    projectId,
+    sources: (data ?? []).map(({ storage_path, ...source }) => ({
+      ...source,
+      hasUploadedFile: Boolean(storage_path),
+    })),
+    total: count ?? 0,
+    offset,
+    limit: PAGE_SIZE,
+  });
 }
 
 export async function POST(request: Request, context: { params: Promise<{ projectId: string }> }) {
