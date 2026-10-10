@@ -94,7 +94,7 @@ export function AuthForm({
       </button>
       {message ? <p className="form-message" role="status" aria-live="polite">{message}</p> : null}
       <p className="auth-switch">
-        {isSignup ? "Already have an account?" : "New to OpenCalcs?"}{" "}
+        {isSignup ? "Already have an account?" : "New to EngCalcs?"}{" "}
         <Link href={authPageHref(isSignup ? "login" : "signup", redirectTo)}>
           {isSignup ? "Sign in" : "Create an account"}
         </Link>

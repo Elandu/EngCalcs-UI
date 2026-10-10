@@ -57,13 +57,13 @@ export default async function DrawingsPage({ searchParams }: DrawingsPageProps) 
       <section className={`dashboard-workspace ${styles.workspace}`}>
         <div className={styles.heading}>
           <div>
-            <p className="eyebrow">OpenCalcs workspace · Calculation-linked drawings</p>
+            <p className="eyebrow">EngCalcs workspace · Calculation-linked drawings</p>
             <h1>Drawing review</h1>
             <p>Mark up structural elements and link them to saved project calculations.</p>
           </div>
           {projectList.length ? (
             <form className={styles.projectPicker} action="/dashboard/drawings" method="get">
-              <label htmlFor="drawing-project">OpenCalcs project</label>
+              <label htmlFor="drawing-project">EngCalcs project</label>
               <div>
                 <select id="drawing-project" name="projectId" defaultValue={projectId}>
                   {projectList.map((project) => (
@@ -84,7 +84,7 @@ export default async function DrawingsPage({ searchParams }: DrawingsPageProps) 
         {!projectList.length ? (
           <aside className={styles.emptyProject}>
             <div>
-              <strong>No OpenCalcs project is available yet</strong>
+              <strong>No EngCalcs project is available yet</strong>
               <p>You can still annotate and export drawings. Create a project to save calculation runs.</p>
             </div>
             <Link className="button button-primary button-small" href="/dashboard/projects/new">
@@ -96,7 +96,7 @@ export default async function DrawingsPage({ searchParams }: DrawingsPageProps) 
         <div className={styles.viewerFrame}>
           <iframe
             key={projectId || "no-project"}
-            title="OpenCalcs drawing review"
+            title="EngCalcs drawing review"
             src={viewerUrl}
             allow="clipboard-write"
           />

@@ -1,0 +1,73 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
+/* Brand layer for the standalone PDF drawing review workspace.
+   Palette and mark match the Next.js engineering workspace. */
+:root {
+  --ink: #f4f6ef;
+  --muted: #bccdc0;
+  --quiet: #9eb2a4;
+  --line: #3a594a;
+  --panel: #18362b;
+  --panel-raised: #244637;
+  --page: #132a23;
+  --mint: #e0c392;
+  --mint-deep: #c47a56;
+  --amber: #d5ac71;
+  --red: #e29b8b;
+  font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+}
+:where(button, input, textarea, select) { font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; }
+:where(.eyebrow, .count-badge, .code-field, .schema-panel pre, .result-block pre) {
+  font-family: "IBM Plex Mono", Consolas, monospace;
+}
+.topbar { background: #19382f; border-bottom-color: #456454; }
+.brand-mark {
+  border-radius: 4px;
+  background: #19382f url("/brand/engcalcs-mark.svg") center / contain no-repeat;
+  color: transparent;
+  font-size: 0;
+}
+.brand strong { font-size: 14px; letter-spacing: -.035em; }
+.brand small { color: #bdcdbb; }
+.local-dot { background: #d5ac71; box-shadow: none; }
+.save-status::before { background: #d5ac71; }
+.upload-dropzone { background: #1c382d; border-color: #627a64; border-radius: 4px; }
+.upload-dropzone:hover, .upload-dropzone.is-dragging { background: #274537; border-color: #d5ac71; }
+.upload-icon { border-radius: 4px; border-color: #738c74; }
+.document-row, .tool-button, .annotation-row, .text-field, .code-field, .button, .icon-button, .count-badge {
+  border-radius: 4px;
+}
+.document-row.is-active { background: #30503c; border-color: #658771; }
+.drawing-column { background: #132a23; }
+.viewer-scroll {
+  background-color: #152e25;
+  background-image: radial-gradient(#496756 .7px, transparent .7px);
+  background-size: 17px 17px;
+}
+.empty-sheet {
+  background: #19382f; transform: none; box-shadow: 7px 7px 0 #244d3a; border-color: #718a75;
+}
+.markup-label { font-family: "IBM Plex Sans", Arial, sans-serif; }
+.draft-shape { fill: #c47a5629; stroke: #d6a074; }
+.tool-button { background: #1f3c30; }
+.tool-button.is-active {
+  background: #36583f; border-color: #bd995d; color: #f4e2bc; box-shadow: none;
+}
+.annotation-row.is-selected { background: #30503d; border-color: #729075; }
+.text-field { background: #122e23; border-color: #557364; }
+.code-field, .schema-panel pre, .result-block pre { background: #10251d; color: #dde8dc; border-color: #466252; }
+.button-primary {
+  background: #d5ac71;
+  color: #18362b;
+  font-weight: 700;
+  border: 1px solid #d5ac71;
+}
+.button-primary:hover:not(:disabled) { background: #e5c490; }
+.button-secondary { background: #244537; border-color: #71917b; color: #f2f3ec; }
+.button-secondary:hover:not(:disabled) { background: #345840; border-color: #c1a16b; }
+.engineering-note { border-left-color: #d5ac71; background: #2b2e25; }
+.engineering-note strong { color: #efce95; }
+.engineering-note p { color: #d5c1a0; }
+@media(prefers-reduced-motion:reduce) {
+  * { transition-duration: 0s !important; animation-duration: 0s !important; }
+}

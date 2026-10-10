@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Brand } from "@/components/brand";
+import { LandingProductPreview } from "@/components/landing-product-preview";
 import "./landing.css";
+import "./landing-v2.css";
 
 const problems = [
   {
@@ -88,21 +90,6 @@ const progress = [
   },
 ];
 
-const business = [
-  {
-    title: "First customer",
-    body: "Australian structural engineering consultants and small to medium design practices that repeatedly prepare, check and revise engineering calculations.",
-  },
-  {
-    title: "Commercial model",
-    body: "A subscription-based engineering workspace, with team workflows and usage-based API or integration offerings as the platform develops.",
-  },
-  {
-    title: "Expansion path",
-    body: "Start with the structural calculation workflow, then extend the same project model and modular engine architecture to additional engineering disciplines.",
-  },
-];
-
 export default function Home() {
   return (
     <main className="landing-page">
@@ -113,7 +100,7 @@ export default function Home() {
             <a href="#problem">The problem</a>
             <a href="#product">The product</a>
             <a href="#ai">How AI fits</a>
-            <a href="#company">The business</a>
+            <Link href="/company">Company</Link>
           </nav>
           <div className="landing-header-actions">
             <Link className="landing-signin" href="/login">Log in</Link>
@@ -142,44 +129,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="landing-window" aria-label="Illustrative example of a connected engineering calculation workflow">
-            <div className="landing-window-header">
-              <span>ENGCALCS / PROJECT WORKFLOW</span>
-              <span>ILLUSTRATIVE</span>
-            </div>
-            <div className="landing-window-body">
-              <div className="landing-workflow-head">
-                <div>
-                  <span className="landing-label">PROJECT / EXAMPLE</span>
-                  <h2>Residential extension</h2>
-                </div>
-                <span className="landing-workflow-status">Engineered workflow</span>
-              </div>
-              <div className="landing-flow">
-                <div className="landing-flow-box">
-                  <span className="landing-label">PROJECT INPUT</span>
-                  <h3>Wind exposure and design actions</h3>
-                  <div className="landing-flow-meta"><span>Site inputs</span><span>AS/NZS 1170.2</span></div>
-                </div>
-                <div className="landing-flow-connector"><span>structured inputs</span></div>
-                <div className="landing-flow-box landing-flow-box-main">
-                  <span className="landing-label">ENGINEERING ANALYSIS</span>
-                  <h3>Frame forces and reactions</h3>
-                  <p>Elastic frame solver with saved inputs and results.</p>
-                </div>
-                <div className="landing-flow-connector"><span>design actions</span></div>
-                <div className="landing-flow-box">
-                  <span className="landing-label">SECTION CHECKS</span>
-                  <h3>Steel / concrete section tools</h3>
-                  <p>Defined calculation scope, reviewable assumptions and engine provenance.</p>
-                </div>
-              </div>
-              <div className="landing-window-foot">
-                <span>Versioned engines · saved calculation runs</span>
-                <span>Engineer reviewed</span>
-              </div>
-            </div>
-          </div>
+          <LandingProductPreview />
         </div>
       </section>
 
@@ -313,27 +263,25 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="landing-section landing-section-muted" id="company">
+      <section className="landing-section landing-section-muted" id="practice">
         <div className="landing-container">
           <div className="landing-business-head">
             <div className="landing-business-heading">
-              <p className="landing-label">THE COMMERCIAL OPPORTUNITY</p>
-              <h2>Built for practising engineers, not for replacing them.</h2>
+              <p className="landing-label">ENGINEERING PRACTICE</p>
+              <h2>Built for the work between the calculations.</h2>
             </div>
             <p>
-              EngCalcs begins with a repeatable problem in Australian structural consulting:
-              preparing, revising and documenting calculations. The long-term product is a commercial
-              engineering workspace with calculation services accessible to teams and other software.
+              EngCalcs is being developed around the everyday needs of consulting engineers:
+              transparent inputs, repeatable methods, linked design work and a reviewable record
+              of what was calculated. AI is a supporting layer, not a substitute for judgement.
             </p>
           </div>
           <div className="landing-business-grid">
-            {business.map((item) => (
-              <article key={item.title}>
-                <h3>{item.title}</h3>
-                <p>{item.body}</p>
-              </article>
-            ))}
+            <article><h3>Understand the input</h3><p>Keep assumptions, units and the engineering context with the calculation.</p></article>
+            <article><h3>Keep work connected</h3><p>Link selected calculation outputs to downstream checks without retyping the same values.</p></article>
+            <article><h3>Revisit a decision</h3><p>Retain versioned runs, provenance and the state of previous engineering work.</p></article>
           </div>
+          <p className="landing-company-link">Interested in the business behind EngCalcs? <Link href="/company">Read our company overview <span aria-hidden="true">↗</span></Link></p>
         </div>
       </section>
 
@@ -365,6 +313,7 @@ export default function Home() {
               <a href="#product">Product</a>
               <a href="#ai">AI</a>
               <Link href="/login">Log in</Link>
+              <Link href="/company">Company</Link>
             </div>
           </div>
           <div className="landing-legal">© 2026 EngCalcs. All rights reserved.</div>

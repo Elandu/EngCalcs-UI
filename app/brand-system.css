@@ -1,0 +1,78 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
+/* Shared EngCalcs visual identity. App behaviour and calculation styling are untouched. */
+:root {
+  --brand-evergreen: #19382f;
+  --brand-paper: #f6f4ed;
+  --brand-white: #fffdfa;
+  --brand-copper: #c47a56;
+  --brand-brass: #d5ac71;
+  --brand-graphite: #273830;
+  --brand-grid: #d5ded6;
+  --brand-muted: #596d60;
+  --ink: var(--brand-graphite);
+  --ink-2: #52665b;
+  --paper: var(--brand-paper);
+  --white: var(--brand-white);
+  --line: var(--brand-grid);
+  --lime: var(--brand-brass);
+  --green: #245944;
+  --mint: #e9f0e8;
+  --blue: #e6eeeb;
+  --orange: #f2e2d7;
+  --shadow: 0 10px 35px rgba(23,49,37,.08);
+}
+html { scroll-padding-top: 82px; }
+body, button, input, select, textarea { font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; }
+button, input, select, textarea { accent-color: var(--brand-evergreen); }
+:where(code, pre, kbd, samp) { font-family: "IBM Plex Mono", Consolas, monospace; }
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: var(--brand-evergreen);
+  font-size: 22px;
+  letter-spacing: -.045em;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.brand-symbol {
+  display: inline-flex;
+  flex: none;
+  width: 35px;
+  height: 35px;
+}
+.brand-symbol svg { width: 100%; height: 100%; display: block; }
+.brand-wordmark { font: inherit; }
+.button { border-radius: 5px; }
+.button-primary { background: var(--brand-evergreen); color: #fffdfa; }
+.button-primary:hover { background: #285343; }
+.button-secondary { background: #fffdfa; border-color: #c5d2c7; color: var(--brand-evergreen); }
+.button-secondary:hover { border-color: #779982; }
+.dashboard-shell, .auth-shell { background: #f3f5f1; }
+.dashboard-header .brand { font-size: 20px; }
+.dashboard-header .brand-symbol { width: 32px; height: 32px; }
+.workspace-primary-nav a { border-radius: 4px; font-size: 12px; font-weight: 600; }
+.workspace-primary-nav a:hover, .workspace-primary-nav a[aria-current="page"] {
+  background: #fffdfa;
+  border-color: #bfccbf;
+  color: var(--brand-evergreen);
+}
+.auth-card, .settings-card, .onboarding-card, .project-list-card, .summary-card,
+.calculator-launcher, .project-row, .wind-workflow-card, .calculation-result-card {
+  box-shadow: none;
+}
+.auth-card, .onboarding-card, .settings-card, .project-list-card, .wind-workflow-card,
+.calculator-launcher { border-color: var(--brand-grid); border-radius: 8px; }
+.auth-submit { background: var(--brand-evergreen); color: #fff; }
+.status-pill { border-radius: 3px; border-color: #c7d1c6; }
+.dashboard-workspace h1 { letter-spacing: -.045em; }
+:where(.workspace-header, .dashboard-title-row, .project-list-header) .eyebrow {
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-weight: 600;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .brand { gap: 8px; font-size: 19px; }
+  .brand-symbol { width: 30px; height: 30px; }
+}

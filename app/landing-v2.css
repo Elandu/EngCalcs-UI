@@ -1,0 +1,96 @@
+/* Engineering editorial identity for the public product and company pages. */
+.landing-page {
+  --lp-bg: #f6f4ed;
+  --lp-ink: #19382f;
+  --lp-muted: #596e60;
+  --lp-line: #d5ded6;
+  --lp-green: #19382f;
+  --lp-accent: #c47a56;
+  background: var(--lp-bg);
+  color: var(--lp-ink);
+  font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+}
+.landing-header { background: rgba(246,244,237,.96); }
+.landing-page .brand { color: var(--lp-ink); font-size: 23px; }
+.landing-page .brand-symbol { width: 35px; height: 35px; }
+.landing-page .landing-label { font-family: "IBM Plex Mono", Consolas, monospace; letter-spacing: .075em; }
+.landing-hero { padding-top: 87px; }
+.landing-hero h1 { letter-spacing: -.055em; max-width: 670px; }
+.landing-hero h1 em { color: #386650; }
+.landing-lead { max-width: 570px; }
+.landing-button { border-radius: 4px; }
+.landing-button-outline { border-color: #9cae9d; }
+.landing-stage { border-left-color: #bc7652; }
+.landing-window { border-radius: 6px; box-shadow: 12px 14px 0 #e5eae2; }
+.landing-window-header { font-family: "IBM Plex Mono", Consolas, monospace; background: #19382f; }
+.landing-window-header span:last-child { color: #e0c2a4; }
+.landing-evidence-item strong { font-size: 16px; }
+.landing-evidence .landing-label { color: #54735b; }
+.landing-product { min-width: 0; }
+.landing-product-toolbar { padding: 23px 24px 19px; display: flex; justify-content: space-between; align-items: flex-end; gap: 15px; border-bottom: 1px solid #dbe2db; }
+.landing-product-toolbar h2 { margin: 6px 0 0; font-size: 24px; line-height: 1.2; letter-spacing: -.04em; }
+.landing-product-tabs { display: flex; gap: 0; border-bottom: 1px solid #d4ded4; }
+.landing-product-tabs span { padding: 8px 10px; font-family: "IBM Plex Mono", Consolas, monospace; color: #728074; font-size: 10px; }
+.landing-product-tabs span.is-active { color: #214c37; border-bottom: 2px solid #214c37; font-weight: 600; }
+.landing-product-drawing { background: #f9fbf8; border-bottom: 1px solid #dde6dc; padding: 15px 19px 5px; }
+.landing-product-canvas-top { display: flex; justify-content: space-between; align-items: center; font-family: "IBM Plex Mono", Consolas, monospace; font-size: 10px; color: #5c7465; letter-spacing: .05em; }
+.landing-beam-svg { display: block; height: auto; max-height: 284px; width: 100%; }
+.landing-product-data { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); border-bottom: 1px solid #dde5dd; }
+.landing-product-data>div { padding: 15px 14px; border-right: 1px solid #dde5dd; min-width: 0; }
+.landing-product-data>div:last-child { border-right: 0; }
+.landing-product-data span { display: block; color: #728273; font-family: "IBM Plex Mono", Consolas, monospace; font-size: 9px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .035em; }
+.landing-product-data strong { display: block; color: #1c4433; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.landing-product-foot { padding: 14px 17px 16px; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.landing-product-foot>span { color: #718072; font-size: 10px; line-height: 1.6; max-width: 300px; }
+.landing-product-foot>a { color: #245c42; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.landing-product-foot>a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.landing-company-link { border-top: 1px solid #ccd7cc; padding-top: 24px; font-size: 13px; color: #5e7061; }
+.landing-company-link a { color: #235741; font-weight: 700; margin-left: 5px; }
+.landing-company-link a:hover { text-decoration: underline; }
+.landing-company-hero { padding: 100px 0 105px; border-bottom: 1px solid var(--lp-line); }
+.landing-company-hero-grid { display: grid; grid-template-columns: 1.06fr .75fr; gap: min(9vw,120px); align-items: center; }
+.landing-company-hero h1 { font-size: clamp(48px,5.6vw,81px); line-height: 1.05; letter-spacing: -.06em; margin: 22px 0 0; }
+.landing-company-hero h1 em { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-style: normal; color: #386650; }
+.landing-company-hero-grid>div:last-child p { color: #526659; line-height: 1.75; font-size: 17px; margin: 0 0 19px; }
+.landing-company-hero-grid>div:last-child p:last-child { margin-bottom: 0; }
+.landing-company-example { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); border: 1px solid #c9d4c9; background: #fffefa; }
+.landing-company-example>div { padding: 27px; border-right: 1px solid #d5ded4; }
+.landing-company-example>div:last-child { border: 0; }
+.landing-company-example strong { display: block; margin: 18px 0 6px; font-size: 21px; letter-spacing: -.03em; }
+.landing-company-example p { font-size: 14px; line-height: 1.7; color: #5c7062; margin: 0; }
+.landing-company-status { border-top: 1px solid #536e61; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); }
+.landing-company-status>div { padding: 26px 26px 5px; border-right: 1px solid #536e61; }
+.landing-company-status>div:first-child { padding-left: 0; }
+.landing-company-status>div:last-child { border: 0; }
+.landing-company-status strong { display: block; margin-top: 20px; font-size: 17px; font-weight: 600; line-height: 1.5; }
+.landing-opportunity-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 32px; border-top: 1px solid #cad6ca; }
+.landing-opportunity-list article { display: grid; grid-template-columns: 44px 1fr; column-gap: 16px; align-items: baseline; padding: 26px 0; border-bottom: 1px solid #cad6ca; }
+.landing-opportunity-list h3 { margin: 0 0 8px; font-size: 21px; letter-spacing: -.035em; }
+.landing-opportunity-list p { grid-column: 2; margin: 0; font-size: 14px; color: #5f7163; line-height: 1.7; }
+.landing-footer .brand { color: #fffefa; }
+.landing-footer .brand-wordmark { color: #fffefa; }
+.landing-footer .brand-symbol svg { filter: brightness(1.15); }
+@media(max-width:1000px) {
+  .landing-company-hero-grid { gap: 40px; }
+  .landing-product-data { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .landing-product-data>div:nth-child(2) { border-right: 0; }
+  .landing-product-data>div:nth-child(-n+2) { border-bottom: 1px solid #dde5dd; }
+}
+@media(max-width:790px) {
+  .landing-company-hero-grid { grid-template-columns: 1fr; }
+  .landing-company-hero { padding: 68px 0 72px; }
+  .landing-company-example, .landing-company-status { grid-template-columns: 1fr; }
+  .landing-company-example>div, .landing-company-status>div, .landing-company-status>div:first-child { border-right: 0; border-bottom: 1px solid #d5ded4; padding: 22px 0; }
+  .landing-company-example>div { padding: 22px; }
+  .landing-company-status>div { border-bottom-color: #536e61; }
+  .landing-opportunity-list { grid-template-columns: 1fr; }
+}
+@media(max-width:550px) {
+  .landing-page .brand-symbol { width: 31px; height: 31px; }
+  .landing-product-toolbar { padding: 17px 14px 14px; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .landing-product-drawing { padding: 12px 9px 3px; }
+  .landing-product-foot { flex-direction: column; align-items: flex-start; gap: 7px; }
+  .landing-product-data>div { padding: 11px; }
+  .landing-company-hero h1 { font-size: 48px; }
+  .landing-company-hero-grid>div:last-child p { font-size: 16px; }
+}
