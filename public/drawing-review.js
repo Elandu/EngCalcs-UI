@@ -666,7 +666,7 @@ function renderCurrentResult() {
       (record.standard.clauses && record.standard.clauses.length ? " · Clause " + record.standard.clauses.join(", ") : "") +
       (record.standard.tables && record.standard.tables.length ? " · " + record.standard.tables.join(", ") : "")
     : "No standard reference";
-  const runReference = record.runId ? " · OpenCalcs run " + record.runId.slice(0, 8) : "";
+  const runReference = record.runId ? " · EngCalcs run " + record.runId.slice(0, 8) : "";
   ui.resultStandard.textContent = standard + runReference + " · Run " + new Date(record.createdAt).toLocaleString();
   ui.resultOutput.textContent = JSON.stringify(record.outputs, null, 2);
 }
@@ -715,7 +715,7 @@ function inputExample(schema) {
 function updateCalculationDescription() {
   const calculation = calculationCatalog.find((item) => item.id === activeCalculationId);
   if (!calculation) {
-    ui.calculationDescription.textContent = "Choose a registered OpenCalcs module calculation.";
+    ui.calculationDescription.textContent = "Choose a registered EngCalcs module calculation.";
     ui.calculationSchema.textContent = "";
     ui.calculationInputs.value = "{}";
     return;
@@ -739,7 +739,7 @@ async function loadCalculationCatalog() {
     const option = document.createElement("option");
     option.textContent = "Calculation library unavailable";
     ui.calculationPicker.append(option);
-    ui.calculationDescription.textContent = "Could not load the OpenCalcs calculation catalogue. " + safeMessage(error);
+    ui.calculationDescription.textContent = "Could not load the EngCalcs calculation catalogue. " + safeMessage(error);
     ui.runCalculation.disabled = true;
   }
 }
@@ -757,7 +757,7 @@ async function runSelectedCalculation() {
     return;
   }
   if (!ACTIVE_PROJECT_ID) {
-    showCalculationError("Choose an OpenCalcs project in the workspace header to save this calculation run.");
+    showCalculationError("Choose an EngCalcs project in the workspace header to save this calculation run.");
     return;
   }
   let inputs;
@@ -902,7 +902,7 @@ function exportSidecar(document, annotations) {
     exported_at: new Date().toISOString(),
     annotations,
     calculations: workspace.calculations.filter((record) => calculationIds.has(record.id)),
-    note: "Drawing markups link to saved OpenCalcs calculation runs. This export does not represent beam, column, connection, or member-capacity verification.",
+    note: "Drawing markups link to saved EngCalcs calculation runs. This export does not represent beam, column, connection, or member-capacity verification.",
   };
 }
 
@@ -972,7 +972,7 @@ async function exportMarkedPdf() {
     const metadata = new TextEncoder().encode(JSON.stringify(exportSidecar(document, marks), null, 2));
     await pdf.attach(metadata, safeFilename(document.name.replace(/\.pdf$/i, "") + ".opencalcs-annotations.json"), {
       mimeType: "application/json",
-      description: "OpenCalcs drawing markup with linked calculation run snapshots.",
+      description: "EngCalcs drawing markup with linked calculation run snapshots.",
     });
     const output = await pdf.save();
     const url = URL.createObjectURL(new Blob([output], { type: "application/pdf" }));
