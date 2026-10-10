@@ -436,6 +436,9 @@ export type Database = {
         Row: {
           id: string
           project_id: string
+          storage_path: string | null
+          storage_byte_size: number | null
+          storage_mime_type: string | null
           source_kind: string
           title: string
           revision_label: string
@@ -447,6 +450,9 @@ export type Database = {
         Insert: {
           id?: string
           project_id: string
+          storage_path?: string | null
+          storage_byte_size?: number | null
+          storage_mime_type?: string | null
           source_kind: string
           title: string
           revision_label?: string
@@ -458,6 +464,9 @@ export type Database = {
         Update: {
           id?: string
           project_id?: string
+          storage_path?: string | null
+          storage_byte_size?: number | null
+          storage_mime_type?: string | null
           source_kind?: string
           title?: string
           revision_label?: string
