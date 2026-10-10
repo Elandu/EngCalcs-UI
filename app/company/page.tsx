@@ -150,7 +150,7 @@ export default function CompanyPage() {
         <div className="landing-container landing-split">
           <div className="landing-split-copy">
             <p className="landing-label">WHY THIS NEEDS AI</p>
-            <h2>Engineers don't need AI to guess the answer. They need help assembling the question.</h2>
+            <h2>Engineers don’t need AI to guess the answer. They need help assembling the question.</h2>
             <p>
               Structural calculations are deterministic once the correct model, inputs and assumptions
               are established. Much of the difficult coordination happens before and after that
