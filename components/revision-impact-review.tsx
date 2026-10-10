@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 
 import { assessRevisionImpact, type ImpactCalculation, type ImpactLink, type ImpactRun } from "@/lib/revision-impact";
+import { FRAME_ANALYSIS_ID, calculationWorkspaceHref } from "@/lib/calculation-catalogue";
 import "./revision-impact-review.css";
 
 type Props = {
@@ -139,8 +140,12 @@ export function RevisionImpactReview({ projectId, calculations, runs, links }: P
                       <p><code>{item.link.source_output_path}</code> feeds <code>{item.link.target_input_path}</code></p>
                       <p className="revision-impact-run-note">{sourceStatus(item.savedSourceCurrent)} · {item.latestTargetRunId ? `target run ${item.latestTargetRunId.slice(0, 8)}` : "no saved target run"}</p>
                       <p className="revision-impact-run-note">Do not assume the downstream numerical result has changed. Review its adopted inputs and rerun the relevant engine.</p>
-                      <Link href={`/dashboard/projects/${encodeURIComponent(projectId)}?calculation=${encodeURIComponent(item.calculation.calculation_definition_id)}&revise=${encodeURIComponent(item.calculation.id)}#workspace`}>
-                        Review calculation →
+                      <Link href={item.calculation.state === "issued"
+                        ? `/dashboard/projects/${encodeURIComponent(projectId)}#calc-${item.calculation.id}`
+                        : item.calculation.calculation_definition_id === FRAME_ANALYSIS_ID
+                          ? calculationWorkspaceHref(FRAME_ANALYSIS_ID, projectId)
+                          : `/dashboard/projects/${encodeURIComponent(projectId)}?calculation=${encodeURIComponent(item.calculation.calculation_definition_id)}&revise=${encodeURIComponent(item.calculation.id)}#workspace`}>
+                        {item.calculation.state === "issued" ? "Inspect issued record →" : "Review calculation →"}
                       </Link>
                     </li>
                   ))}
