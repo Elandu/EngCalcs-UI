@@ -16,7 +16,7 @@ begin
         (
           storage_path is not null and storage_byte_size between 5 and 10485760
           and storage_mime_type = 'application/pdf'
-          and storage_path ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\\.pdf$'
+          and storage_path ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}[.]pdf$'
           and split_part(storage_path, '/', 1) = project_id::text
           and content_sha256 ~ '^[a-f0-9]{64}$'
         )
@@ -64,7 +64,7 @@ create policy engineering_source_objects_select_member on storage.objects
   for select to authenticated
   using (
     bucket_id='engineering-project-sources'
-    and name ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\\.pdf$'
+    and name ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}[.]pdf$'
     and exists (
       select 1 from public.projects p
         where p.id::text = split_part(name,'/',1)
@@ -77,7 +77,7 @@ create policy engineering_source_objects_insert_engineer on storage.objects
   for insert to authenticated
   with check (
     bucket_id='engineering-project-sources'
-    and name ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\\.pdf$'
+    and name ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}[.]pdf$'
     and exists (
       select 1 from public.projects p
         where p.id::text = split_part(name,'/',1)
