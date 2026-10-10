@@ -27,6 +27,7 @@ test("source evidence is tenant-scoped, proposals are manually proposed and immu
         id uuid primary key default gen_random_uuid(),
         bucket_id text references storage.buckets(id), name text not null
       );
+      alter table storage.objects enable row level security;
       grant usage on schema storage to authenticated;
       grant select,insert on storage.objects to authenticated;
       create table auth.users(id uuid primary key);
