@@ -1,0 +1,59 @@
+/* Revision impact is read-only and never implies automatic design approval. */
+.revision-impact{margin-top:25px;padding:0;overflow:hidden;border-color:#cfd9d0}
+.revision-impact-heading{display:flex;justify-content:space-between;gap:20px;padding:24px 27px;border-bottom:1px solid #d8e2d8}
+.revision-impact-heading h2{margin:4px 0 8px;font-size:25px;letter-spacing:-.04em;color:#19382f}
+.revision-impact-heading p:last-child{margin:0;max-width:670px;line-height:1.6;color:#587060;font-size:13px}
+.revision-impact-tag{align-self:flex-start;flex:none;border:1px solid #cbd5cb;border-radius:3px;color:#4c6655;padding:6px 9px;font:600 10px "IBM Plex Mono",Consolas,monospace;text-transform:uppercase;letter-spacing:.045em}
+.revision-impact-selector{display:flex;align-items:center;gap:13px;padding:18px 27px;flex-wrap:wrap}
+.revision-impact-selector label{font-size:13px;font-weight:700;color:#365442}
+.revision-impact-selector select{min-width:240px;max-width:100%;padding:9px 13px;border:1px solid #bed0c0;background:#fffefa;border-radius:4px;color:#19382f;font-size:13px}
+.revision-impact-selector span{margin-left:auto;color:#5a6d5d;font:11px "IBM Plex Mono",Consolas,monospace}
+.revision-impact-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid #dae3d9;border-bottom:1px solid #dae3d9;background:#f3f6f1}
+.revision-impact-summary>div{padding:17px 25px;border-right:1px solid #d5e1d5}
+.revision-impact-summary>div:last-child{border-right:0}
+.revision-impact-summary span{display:block;margin-bottom:4px;font-size:12px;font-weight:650;color:#3c5946}
+.revision-impact-summary strong{display:block;font-size:33px;line-height:1.25;font-weight:700;color:#19382f;font-variant-numeric:tabular-nums}
+.revision-impact-summary small{display:block;font-size:11px;color:#64796a;line-height:1.5}
+.revision-impact-note{margin:18px 27px 0;padding:13px 16px;border-left:3px solid #c47a56;background:#f9f1e7;color:#725641;font-size:12px;line-height:1.6}
+.revision-impact-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0}
+.revision-impact-panel{padding:25px 27px;min-width:0}
+.revision-impact-panel+.revision-impact-panel{border-left:1px solid #d7e1d6}
+.revision-impact-panel-heading{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:15px}
+.revision-impact-panel-heading h3{margin:0;font-size:16px;color:#244332;letter-spacing:-.025em}
+.revision-impact-panel-heading span{font:10px "IBM Plex Mono",Consolas,monospace;color:#667b69;white-space:nowrap}
+.revision-impact-value{padding:14px 0;border-bottom:1px solid #e1e8df}
+.revision-impact-value:first-child{padding-top:0}
+.revision-impact-value-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+.revision-impact-value-head code{overflow-wrap:anywhere;font:600 11px "IBM Plex Mono",Consolas,monospace;color:#2d5a41}
+.impact-state{font:600 10px "IBM Plex Mono",Consolas,monospace;padding:3px 6px;line-height:1.5;border-radius:3px;background:#edf2e9;color:#466e4f}
+.impact-state-changed{background:#f6e5d6;color:#8a4b34}
+.impact-state-unverifiable{background:#edece5;color:#74674a}
+.impact-state-unchanged{background:#e3f0e4;color:#3c754b}
+.revision-impact-before-after{display:grid;grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr);gap:8px;align-items:center;margin-top:12px}
+.revision-impact-before-after>span{color:#698272;text-align:center}
+.revision-impact-before-after>div{min-width:0;background:#f4f6f1;padding:12px}
+.revision-impact-before-after small{display:block;font-size:10px;color:#668070}
+.revision-impact-before-after strong{display:block;font:600 12px/1.7 "IBM Plex Mono",Consolas,monospace;overflow-wrap:anywhere;color:#193b2d;margin-top:2px}
+.revision-impact-warnings{margin-top:17px;padding:15px;border-left:2px solid #c47a56;background:#faf4ed}
+.revision-impact-warnings strong{font-size:12px;color:#70492f}
+.revision-impact-warnings ul{padding-left:17px;margin:8px 0 0;color:#725945;font-size:11px;line-height:1.7}
+.revision-impact-muted{color:#657a69;font-size:12px;line-height:1.6}
+.revision-impact-queue{list-style:none;margin:0;padding:0}
+.revision-impact-queue li{padding:16px 0;border-top:1px solid #e0e7df}
+.revision-impact-queue li:first-child{padding-top:3px;border:0}
+.revision-impact-queue-top{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.revision-impact-depth{font:600 10px "IBM Plex Mono",Consolas,monospace;color:#667a69}
+.revision-impact-queue h4{font-size:16px;letter-spacing:-.025em;color:#204934;margin:10px 0 6px}
+.revision-impact-queue p{font-size:11px;line-height:1.6;margin:0 0 8px;color:#4e6455}
+.revision-impact-queue p code{font-family:"IBM Plex Mono",Consolas,monospace;color:#456c4f;overflow-wrap:anywhere}
+.revision-impact-queue .revision-impact-run-note{color:#6e816f}
+.revision-impact-queue a,.revision-impact-empty a{color:#285d42;font-size:12px;font-weight:700}
+.revision-impact-queue a:hover,.revision-impact-empty a:hover{text-decoration:underline;text-underline-offset:3px}
+.revision-impact-footer{padding:20px 27px;background:#e8eee6;border-top:1px solid #d5dfd3}
+.revision-impact-footer strong{font-size:13px;color:#1f4631}
+.revision-impact-footer p{max-width:1000px;margin:5px 0 0;font-size:12px;line-height:1.65;color:#587061}
+.revision-impact-empty{padding:30px 27px}
+.revision-impact-empty strong{color:#254631}
+.revision-impact-empty p{color:#5d7164;font-size:13px;line-height:1.7;max-width:700px}
+@media(max-width:850px){.revision-impact-columns{grid-template-columns:1fr}.revision-impact-panel+.revision-impact-panel{border-left:0;border-top:1px solid #d7e1d6}.revision-impact-summary>div{padding:15px}}
+@media(max-width:550px){.revision-impact-heading{padding:20px;flex-direction:column}.revision-impact-selector{padding:15px 20px}.revision-impact-selector select{width:100%}.revision-impact-selector span{margin-left:0}.revision-impact-summary{grid-template-columns:1fr}.revision-impact-summary>div{border-right:0;border-bottom:1px solid #d5e1d5;padding:13px 20px}.revision-impact-summary strong{font-size:25px}.revision-impact-panel{padding:20px}.revision-impact-footer{padding:20px}.revision-impact-note{margin:15px 20px 0}}
